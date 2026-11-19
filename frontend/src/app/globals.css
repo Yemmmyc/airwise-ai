@@ -1,0 +1,69 @@
+@import "leaflet/dist/leaflet.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #0B1415;
+  --bg-sidebar: #092C29;
+  --bg-card: #142321;
+  --bg-surface-secondary: #1B302D;
+  --accent-primary: #14B8A6;
+  --accent-secondary: #5EEAD4;
+  --text-main: #F1F5F4;
+  --text-secondary: #A3B8B2;
+  --border-subtle: #29423D;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Dark theme Leaflet overrides for AIRWISE AI Map */
+.airwise-leaflet-container {
+  background-color: #0b1415;
+  font-family: inherit;
+}
+
+.airwise-leaflet-container .leaflet-control-zoom a {
+  background-color: #142321;
+  color: #f1f5f4;
+  border-color: #29423d;
+}
+
+.airwise-leaflet-container .leaflet-control-zoom a:hover {
+  background-color: #1b302d;
+  color: #5eead4;
+}
+
+.airwise-leaflet-container .leaflet-control-attribution {
+  background-color: rgba(11, 20, 21, 0.88);
+  color: #a3b8b2;
+  font-size: 10px;
+}
+
+.airwise-leaflet-container .leaflet-control-attribution a {
+  color: #5eead4;
+}
+
+.airwise-leaflet-container .leaflet-popup-content-wrapper,
+.airwise-leaflet-container .leaflet-popup-tip {
+  background-color: #142321;
+  color: #f1f5f4;
+  border: 1px solid #29423d;
+}
+
+.airwise-leaflet-container .leaflet-popup-close-button {
+  color: #a3b8b2;
+}
+
+.airwise-leaflet-container .leaflet-popup-close-button:hover {
+  color: #5eead4;
+}
