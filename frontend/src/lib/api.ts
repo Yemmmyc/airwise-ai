@@ -15,6 +15,7 @@ import {
   HistoricalAirQualityResponse,
   HistoricalCityComparisonResponse,
   HistoricalRangeDays,
+  PredictiveIntelligenceResponse,
 } from "@/types/dashboard";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
@@ -362,5 +363,50 @@ export async function fetchHistoricalCityComparison(
 
   return (await response.json()) as HistoricalCityComparisonResponse;
 }
+
+export async function fetchPredictiveIntelligence(
+  locationId: string = "lagos-ng",
+  signal?: AbortSignal
+): Promise<PredictiveIntelligenceResponse> {
+  const params = new URLSearchParams({ location_id: locationId });
+  const url = `${getApiBaseUrl()}/api/v1/air-quality/intelligence?${params.toString()}`;
+
+  const response = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    signal,
+    cache: "no-store",
+    timeoutMs: 12000,
+  });
+
+  if (!response.ok) {
+    let errorMessage = `Predictive intelligence endpoint returned HTTP ${response.status}`;
+    let errorCode: string | undefined;
+
+    try {
+      const errorPayload = (await response.json()) as {
+        detail?: { message?: string; error_code?: string } | string;
+      };
+      if (typeof errorPayload?.detail === "string") {
+        errorMessage = errorPayload.detail;
+      } else if (errorPayload?.detail && typeof errorPayload.detail.message === "string") {
+        errorMessage = errorPayload.detail.message;
+        errorCode = errorPayload.detail.error_code;
+      }
+    } catch {
+      // Ignore JSON parsing failure on non-200 error response
+    }
+
+    throw new ApiClientError(
+      errorMessage,
+      response.status,
+      errorCode,
+      response.status === 504
+    );
+  }
+
+  return (await response.json()) as PredictiveIntelligenceResponse;
+}
+
 
 

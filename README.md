@@ -16,6 +16,7 @@ AIRWISE AI is a local-first, full-stack environmental intelligence platform for 
   - **Live Air Quality Dashboard ([DashboardClient.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/DashboardClient.tsx)):** Synchronized city selector (`lagos-ng`, `abuja-ng`, `nairobi-ke`, `accra-gh`), US EPA AQI summary with category legend, 5 pollutant cards (`PM2.5`, `PM10`, `NO2`, `O3`, `SO2`), future-only hourly forecast timeline + accessible table, CAMS Global provenance section, non-medical health guidance, and explicit Demo Mode toggle.
   - **Air Quality Intelligence Map ([AirQualityMapSection.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/AirQualityMapSection.tsx), [LeafletMapCanvas.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/LeafletMapCanvas.tsx)):** Interactive Leaflet map using free, keyless CARTO Dark Matter / OpenStreetMap tiles plotting all 4 configured cities (no browser GPS/geolocation permissions requested), synchronized bidirectionally with the dashboard location selector.
   - **Historical Trends & Insights ([HistoricalTrendsSection.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/HistoricalTrendsSection.tsx)):** Zero-dependency accessible custom SVG charts supporting 7, 14, and 30-day ranges, 6 selectable metrics (`US AQI`, `PM2.5`, `PM10`, `NO2`, `O3`, `SO2`), daily summaries & peaks, 7-day hourly model series, 4-city daily AQI comparison (distinct color, dash pattern, and marker shape per city), non-causal observational insights, and accessible tabular alternatives.
+  - **Predictive Intelligence & Risk Insights ([PredictiveIntelligenceSection.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/PredictiveIntelligenceSection.tsx)):** Phase 7 deterministic risk UI displaying **Peak Forecast Risk**, elevated-risk windows, isolated single-hour spikes, comparatively favorable windows, independent activity-planning cards, 6-metric non-color trend signals, and transparent forecast data-quality evidence (paused automatically in Demo Mode).
   - **Gemini Air Quality Assistant ([AssistantPanel.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/AssistantPanel.tsx)):** Interactive conversation experience supporting **Ask AIRWISE**, **Daily Activity Planner**, **Pollutant Education**, and **4-City Comparison**, strictly grounded in verified FastAPI Open-Meteo responses with explicit separation of verified data, forecast data, AI interpretation, and general non-medical health guidance.
 - **Strict Frontend/Backend Boundary:** The browser communicates **only** with the local FastAPI backend (`NEXT_PUBLIC_API_BASE_URL`). It never calls Open-Meteo or Google Gemini directly and never holds API secrets.
 
@@ -25,6 +26,7 @@ AIRWISE AI is a local-first, full-stack environmental intelligence platform for 
   - `app/services/open_meteo.py`: Live Open-Meteo CAMS Global model retrieval, timezone-aware temporal classification (`historical_model`, `current_model`, `hourly_forecast`), unit normalization, and 300-second in-memory live TTL cache.
   - `app/services/open_meteo_history.py`: Historical Open-Meteo retrieval (`past_days=7|14|30`, `forecast_days=0`), local-timezone daily aggregations, period summaries, dedicated 20-minute historical in-memory TTL cache, and fault-isolated 4-city comparison.
   - `app/services/history_store.py`: Modular Python stdlib `sqlite3` persistence (`backend/data/airwise_history.db`, excluded from Git) keyed by `(location_id, timestamp_utc, model_domain)` with idempotent upserts and upstream-outage fallback.
+  - `app/services/predictive_intelligence.py`: Phase 7 deterministic, rule-based analytical engine transforming authoritative Open-Meteo CAMS Global 24-hour forecasts into Peak Forecast Risk, elevated-risk windows, single-hour spikes, comparatively favorable windows, independent activity guidance, provisional OLS trend signals, and qualitative data-quality evidence (zero AI generation, zero ML training).
   - `app/services/gemini_assistant.py`: Backend-only Gemini integration (`gemini-2.5-flash` via `google-genai`) grounded strictly in verified Open-Meteo data, returning a clean `HTTP 503 assistant_unavailable` state whenever `GEMINI_API_KEY` is unset.
   - `app/services/demo_data.py`: Canonical 4-city location registry and deterministic Day 1 demo scenarios (used only when the user explicitly selects Demo Mode).
 
@@ -74,8 +76,59 @@ AIRWISE AI strictly separates every data category and never silently mixes live,
 | `GET /api/v1/air-quality` | `location_id=lagos-ng` | Current CAMS Global model estimate (`us_aqi`, `pm2_5`, `pm10`, `no2`, `o3`, `so2`) + strictly future hourly forecast (`> observation_time`) + 300s in-memory cache. |
 | `GET /api/v1/air-quality/history` | `location_id=lagos-ng&days=7\|14\|30&force_refresh=false` | Genuine historical hourly records (`historical_model`), local-timezone daily summaries, period summary, completeness %, SQLite persistence, and 20-minute historical cache. |
 | `GET /api/v1/air-quality/history/compare` | `days=7\|14\|30&force_refresh=false` | Fault-isolated historical comparison across Lagos, Abuja, Nairobi, and Accra. A failure in one city never fails the others. |
+| `GET /api/v1/air-quality/intelligence` | `location_id=lagos-ng` | Phase 7 deterministic Predictive Intelligence & Risk Insights (Peak Forecast Risk, elevated-risk windows, single-hour spikes, comparatively favorable windows, independent activity planner, 6-metric provisional OLS trend signals, and qualitative data-quality evidence). |
 | `GET /api/v1/assistant/status` | — | Safe readiness check confirming whether backend `GEMINI_API_KEY` is configured (never exposes secrets). |
 | `POST /api/v1/assistant/ask` | JSON (`location_id`, `mode`, `question`, `pollutant_code`, `history`) | Grounded Gemini assistant (`ask`, `activity_planner`, `pollutant_education`, `city_comparison`). Returns `HTTP 503 assistant_unavailable` if `GEMINI_API_KEY` is unset. |
+
+### Phase 7 Predictive Intelligence Overview & Algorithmic Limitations
+
+**Endpoint:** `GET /api/v1/air-quality/intelligence?location_id={id}` (canonical IDs: `lagos-ng`, `abuja-ng`, `nairobi-ke`, `accra-gh`).
+
+- **Deterministic Engine (`app/services/predictive_intelligence.py`):**
+  - **Peak Forecast Risk:** Anchored on maximum hourly forecast US AQI so short spikes are not hidden by a daily mean, accompanied by mean AQI, minimum AQI, dominant category, and hourly category distribution. Does not imply uniform all-day risk.
+  - **Elevated-Risk Windows & Single-Hour Spikes:** Detects `>= 2` consecutive forecast hours at `US AQI >= 101` (`duration_hours = len(window_observations)`). Missing observations, timestamp gaps (`Δt != 1h`), or lower-risk hours immediately terminate windows (never merged). Isolated 1-hour spikes are preserved in `single_hour_spikes`.
+  - **Comparatively Favorable Windows (2–4h) & Independent Activity Planner:** Share a contiguous 100%-valid candidate-window generator (`generate_contiguous_windows`) while evaluating general comparative windows (`<= 150` ceiling) and activity rules (`outdoor_exercise` 2–3h `<= 100`, `outdoor_errands` 1–2h `<= 150`, `general_outdoor` 2–4h `<= 150`) independently.
+  - **Independent Trend Signals:** Computes elapsed-hour OLS trends separately for `US AQI`, `PM2.5`, `PM10`, `NO2`, `O3`, and `SO2` (`Rising`, `Stable`, `Falling`, `Insufficient data`) without zero-filling missing points.
+  - **Transparent Data-Quality Evidence:** Returns qualitative tiers (`High`, `Moderate`, `Limited`, `Insufficient data`), valid/missing hour counts, timestamp continuity, per-pollutant coverage, cache hit status, and per-module sufficiency—with **no arbitrary 0–100 numeric confidence score**.
+- **Algorithmic & Scientific Limitations:**
+  - All risk-window defaults, trend slope/percentage/noise-floor/`R²` thresholds, and activity ceilings are **provisional MVP engineering heuristics**, not medically validated exposure limits or empirically calibrated forecast accuracy statistics.
+  - `R²` is used solely as a provisional noise-suppression heuristic and does **not** represent forecast reliability.
+  - Qualitative data-quality tiers measure **available input completeness and continuity only**, not statistical forecast accuracy.
+  - Outputs are derived from Open-Meteo **CAMS Global** (~0.4° / ~45 km grid, 3-hourly native output interpolated to 1-hourly API timestamps), not roadside physical sensor measurements. AIRWISE AI has not trained a new atmospheric forecasting model and provides no medical diagnosis or guarantee of personal safety.
+
+**Illustrative Response Structure (Not Live Forecast Data):**
+```json
+{
+  "location": { "id": "lagos-ng", "display_name": "Lagos, Nigeria", "timezone": "Africa/Lagos" },
+  "data_mode": "predictive_intelligence",
+  "data_label": "ANALYTICAL INTERPRETATION — BASED ON OPEN-METEO CAMS GLOBAL FORECAST",
+  "observation_time": "2026-11-21T08:00",
+  "retrieval_time": "2026-11-21T07:05:00Z",
+  "horizon_hours": 24,
+  "daily_summary": {
+    "peak_forecast_risk": "Moderate",
+    "peak_aqi": 87,
+    "peak_time": "2026-11-21T09:00",
+    "mean_aqi": 68.4,
+    "min_aqi": 52,
+    "dominant_category": "Moderate",
+    "risk_window_evaluation_status": "evaluated",
+    "risk_windows_count": 0,
+    "single_hour_spikes_count": 0,
+    "better_windows_count": 2,
+    "data_quality_tier": "High",
+    "deterministic_summary": "Across 24/24 available forecast hours..."
+  },
+  "risk_windows": [],
+  "single_hour_spikes": [],
+  "better_windows": { "status": "windows_identified", "guardrail_max_aqi_ceiling": 150, "windows": [] },
+  "trend_signals": [{ "metric": "us_aqi", "signal": "Stable", "valid_points": 24, "volatility_flag": false }],
+  "activity_recommendations": [{ "activity_type": "outdoor_exercise", "status": "window_identified", "is_medical_advice": false }],
+  "data_quality": { "tier": "High", "valid_aqi_hours": 24, "expected_forecast_hours": 24, "completeness_percent": 100.0, "timestamp_continuity": "continuous" },
+  "is_demo_data": false,
+  "is_ai_generated": false
+}
+```
 
 ---
 
@@ -152,7 +205,7 @@ Open **`http://localhost:3000`** in your browser.
 cd C:\Projects\airwise-ai\backend
 .\.venv\Scripts\python.exe -m pytest -v
 ```
-Runs all **44 offline mocked tests** across `tests/test_api.py` (24), `tests/test_assistant.py` (9), and `tests/test_history.py` (11).
+Runs all **71 offline mocked tests** across `tests/test_api.py` (24), `tests/test_assistant.py` (9), `tests/test_history.py` (11), and `tests/test_intelligence.py` (27).
 
 ### Frontend TypeScript Check & Production Build
 ```powershell

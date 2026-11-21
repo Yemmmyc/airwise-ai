@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import AirQualityMapSection from "@/components/AirQualityMapSection";
 import AssistantPanel from "@/components/AssistantPanel";
 import HistoricalTrendsSection from "@/components/HistoricalTrendsSection";
+import PredictiveIntelligenceSection from "@/components/PredictiveIntelligenceSection";
 import {
   fetchBackendHealth,
   fetchDashboardData,
@@ -520,6 +521,11 @@ export default function DashboardClient() {
                   id: "forecast",
                   label: "Hourly Forecast",
                   href: "#section-forecast",
+                },
+                {
+                  id: "intelligence",
+                  label: "Risk Intelligence",
+                  href: "#section-intelligence",
                 },
                 {
                   id: "history",
@@ -1555,6 +1561,12 @@ export default function DashboardClient() {
               </div>
             )}
           </section>
+
+          {/* 3.25 Deterministic Predictive Intelligence & Risk Insights */}
+          <PredictiveIntelligenceSection
+            selectedLocation={activeLocation}
+            isDashboardDemoMode={isDemoMode}
+          />
 
           {/* 3.5 Historical Air Quality Trends & 4-City Comparison */}
           <HistoricalTrendsSection

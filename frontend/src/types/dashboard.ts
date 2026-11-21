@@ -453,4 +453,178 @@ export interface HistoricalCityComparisonResponse {
   disclaimer: string;
 }
 
+// ============================================================================
+// Phase 7: Deterministic Predictive Intelligence & Risk Insights Schemas
+// ============================================================================
+
+export type RiskCategory = AqiBand | "Unavailable";
+export type TrendSignal = "Rising" | "Stable" | "Falling" | "Insufficient data";
+export type DataQualityTier = "High" | "Moderate" | "Limited" | "Insufficient data";
+export type TimestampContinuity = "continuous" | "minor_gaps" | "major_gaps" | "none";
+export type ModuleSufficiencyStatus = "sufficient" | "insufficient_data";
+export type ActivityType = "outdoor_exercise" | "outdoor_errands" | "general_outdoor";
+export type ActivityRecommendationStatus =
+  | "window_identified"
+  | "no_qualifying_window"
+  | "insufficient_data";
+export type RiskWindowEvaluationStatus = "evaluated" | "insufficient_data";
+export type BetterWindowStatus =
+  | "windows_identified"
+  | "no_qualifying_window"
+  | "insufficient_data";
+
+export interface HourlyRiskPoint {
+  time: string;
+  us_aqi: number | null;
+  risk_category: RiskCategory;
+  severity_rank: number;
+}
+
+export interface CategoryDistributionEntry {
+  category: AqiBand;
+  hours: number;
+  percentage: number;
+}
+
+export interface RiskWindow {
+  start_time: string;
+  end_time: string;
+  duration_hours: number;
+  peak_aqi: number;
+  peak_time: string;
+  mean_aqi: number;
+  severity_category: AqiBand;
+  timezone: string;
+  crosses_midnight: boolean;
+  interrupted_by_missing_data: boolean;
+}
+
+export interface SingleHourSpike {
+  time: string;
+  us_aqi: number;
+  category: AqiBand;
+  timezone: string;
+}
+
+export interface CandidateWindow {
+  start_time: string;
+  end_time: string;
+  duration_hours: number;
+  mean_aqi: number;
+  min_aqi: number;
+  max_aqi: number;
+  category: AqiBand;
+  hourly_aqi_values: number[];
+  timezone: string;
+  crosses_midnight: boolean;
+}
+
+export interface BetterWindow extends CandidateWindow {
+  rationale: string;
+}
+
+export interface BetterWindowResult {
+  status: BetterWindowStatus;
+  guardrail_max_aqi_ceiling: number;
+  windows: BetterWindow[];
+  note: string;
+}
+
+export interface MetricTrendSignal {
+  metric: "us_aqi" | "PM2.5" | "PM10" | "NO2" | "O3" | "SO2";
+  unit: string;
+  signal: TrendSignal;
+  valid_points: number;
+  elapsed_span_hours: number;
+  slope_per_hour: number | null;
+  projected_net_change: number | null;
+  r_squared: number | null;
+  volatility_flag: boolean;
+  description: string;
+  heuristic_note: string;
+}
+
+export interface ActivityRecommendation {
+  activity_type: ActivityType;
+  label: string;
+  status: ActivityRecommendationStatus;
+  operational_rule_description: string;
+  recommended_window: CandidateWindow | null;
+  rationale: string;
+  is_medical_advice: false;
+  disclaimer: string;
+}
+
+export interface PollutantCoverageInfo {
+  valid_hours: number;
+  expected_hours: number;
+  completeness_percent: number;
+}
+
+export interface ModuleSufficiency {
+  risk_windows: ModuleSufficiencyStatus;
+  better_windows: ModuleSufficiencyStatus;
+  trend_signals: ModuleSufficiencyStatus;
+  activity_planner: ModuleSufficiencyStatus;
+}
+
+export interface ForecastDataQuality {
+  tier: DataQualityTier;
+  valid_aqi_hours: number;
+  expected_forecast_hours: number;
+  completeness_percent: number;
+  missing_hours_count: number;
+  timestamp_continuity: TimestampContinuity;
+  gap_count: number;
+  pollutant_coverage: Record<string, PollutantCoverageInfo>;
+  cache_hit: boolean;
+  source_provider: string;
+  module_sufficiency: ModuleSufficiency;
+  disclosure: string;
+}
+
+export interface DailyIntelligenceSummary {
+  peak_forecast_risk: RiskCategory;
+  peak_aqi: number | null;
+  peak_time: string | null;
+  mean_aqi: number | null;
+  min_aqi: number | null;
+  dominant_category: RiskCategory;
+  category_distribution: CategoryDistributionEntry[];
+  risk_window_evaluation_status: RiskWindowEvaluationStatus;
+  risk_windows_count: number;
+  single_hour_spikes_count: number;
+  better_windows_count: number;
+  forecast_completeness_percent: number;
+  data_quality_tier: DataQualityTier;
+  deterministic_summary: string;
+}
+
+export interface PredictiveIntelligenceResponse {
+  location: LocationOption;
+  provider: string;
+  data_mode: "predictive_intelligence";
+  data_label: "ANALYTICAL INTERPRETATION — BASED ON OPEN-METEO CAMS GLOBAL FORECAST";
+  observation_time: string;
+  retrieval_time: string;
+  generated_at: string;
+  timezone: string;
+  timezone_abbreviation: string | null;
+  horizon_hours: number;
+  hourly_risk_timeline: HourlyRiskPoint[];
+  daily_summary: DailyIntelligenceSummary;
+  risk_windows: RiskWindow[];
+  single_hour_spikes: SingleHourSpike[];
+  better_windows: BetterWindowResult;
+  trend_signals: MetricTrendSignal[];
+  activity_recommendations: ActivityRecommendation[];
+  data_quality: ForecastDataQuality;
+  provenance: DataProvenance;
+  attribution: DataAttribution;
+  is_demo_data: false;
+  is_ai_generated: false;
+  disclaimer: string;
+}
+
+
 

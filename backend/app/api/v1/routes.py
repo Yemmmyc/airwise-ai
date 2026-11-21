@@ -13,6 +13,7 @@ from app.schemas.history import (
     HistoricalAirQualityResponse,
     HistoricalCityComparisonResponse,
 )
+from app.schemas.intelligence import PredictiveIntelligenceResponse
 from app.services.demo_data import build_demo_dashboard
 from app.services.gemini_assistant import (
     GeminiAssistantError,
@@ -28,6 +29,7 @@ from app.services.open_meteo_history import (
     fetch_historical_air_quality,
     fetch_historical_city_comparison,
 )
+from app.services.predictive_intelligence import fetch_predictive_intelligence
 
 router = APIRouter()
 
@@ -189,6 +191,41 @@ def get_air_quality_history_compare(
                 "error_code": exc.error_code,
                 "message": exc.message,
                 "days": days,
+                "data_mode": "unavailable",
+                "is_demo_data": False,
+            },
+        ) from exc
+
+
+@router.get(
+    "/air-quality/intelligence",
+    response_model=PredictiveIntelligenceResponse,
+    summary="Get Deterministic Predictive Intelligence & Risk Insights",
+    description=(
+        "Transforms verified Open-Meteo CAMS Global hourly forecasts into deterministic Peak Forecast Risk, "
+        "elevated-risk windows, single-hour spikes, comparatively favorable windows, independent activity "
+        "planning guidance, provisional OLS trend signals, and transparent forecast data-quality evidence."
+    ),
+)
+def get_air_quality_intelligence(
+    location_id: str = Query(
+        default="lagos-ng",
+        min_length=2,
+        max_length=40,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="Canonical location identifier: lagos-ng, abuja-ng, nairobi-ke, or accra-gh",
+    ),
+) -> PredictiveIntelligenceResponse:
+    """Return deterministic predictive intelligence for the requested canonical location."""
+    try:
+        return fetch_predictive_intelligence(location_id=location_id)
+    except OpenMeteoProviderError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={
+                "error_code": exc.error_code,
+                "message": exc.message,
+                "location_id": location_id,
                 "data_mode": "unavailable",
                 "is_demo_data": False,
             },
