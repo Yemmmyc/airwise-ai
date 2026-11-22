@@ -1110,7 +1110,7 @@ export default function HistoricalTrendsSection({
                   <div className="w-full overflow-x-auto">
                     <svg
                       viewBox={`0 0 ${dailyChart.width} ${dailyChart.height}`}
-                      role="img"
+                      role="group"
                       aria-label={`Daily ${activeMetric.label} historical line chart for ${selectedLocation.display_name} over ${rangeDays} days`}
                       className="w-full h-auto min-w-[540px]"
                     >
@@ -1201,7 +1201,13 @@ export default function HistoricalTrendsSection({
                                 onMouseEnter={() => setFocusedDayIndex(idx)}
                                 onFocus={() => setFocusedDayIndex(idx)}
                                 onClick={() => setFocusedDayIndex(idx)}
-                                className="cursor-pointer focus:outline-none"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setFocusedDayIndex(idx);
+                                  }
+                                }}
+                                className="cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-theme-mint"
                               />
                             )}
                           </g>
@@ -1213,7 +1219,7 @@ export default function HistoricalTrendsSection({
                   <div className="w-full overflow-x-auto">
                     <svg
                       viewBox={`0 0 ${hourlyChart.width} ${hourlyChart.height}`}
-                      role="img"
+                      role="group"
                       aria-label={`7-day hourly ${activeMetric.label} historical model chart for ${selectedLocation.display_name}`}
                       className="w-full h-auto min-w-[540px]"
                     >
@@ -1283,7 +1289,13 @@ export default function HistoricalTrendsSection({
                                 onMouseEnter={() => setFocusedHourIndex(idx)}
                                 onFocus={() => setFocusedHourIndex(idx)}
                                 onClick={() => setFocusedHourIndex(idx)}
-                                className="cursor-pointer focus:outline-none"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setFocusedHourIndex(idx);
+                                  }
+                                }}
+                                className="cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-theme-mint"
                               />
                             )}
                           </g>
@@ -1542,7 +1554,7 @@ export default function HistoricalTrendsSection({
                 <div className="w-full overflow-x-auto">
                   <svg
                     viewBox={`0 0 ${compareChart.width} ${compareChart.height}`}
-                    role="img"
+                    role="group"
                     aria-label={`Four-city daily average US AQI historical comparison chart over ${rangeDays} days`}
                     className="w-full h-auto min-w-[540px]"
                   >
@@ -1597,7 +1609,13 @@ export default function HistoricalTrendsSection({
                               onMouseEnter={() => setFocusedCompareDayIndex(idx)}
                               onFocus={() => setFocusedCompareDayIndex(idx)}
                               onClick={() => setFocusedCompareDayIndex(idx)}
-                              className="cursor-pointer focus:outline-none"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  setFocusedCompareDayIndex(idx);
+                                }
+                              }}
+                              className="cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-theme-mint"
                             >
                               {renderCityShapeMarker(s.shape, pt.x, pt.y, s.stroke)}
                             </g>

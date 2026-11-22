@@ -295,7 +295,10 @@ export default function AirQualityMapSection({
               <span className="text-[11px] text-theme-muted">Synced</span>
             </div>
 
-            <div role="list" aria-label="Configured African cities air quality status" className="space-y-2">
+            <ul
+              aria-label="Configured African cities air quality status"
+              className="space-y-2 list-none m-0 p-0"
+            >
               {orderedCityList.map((city) => {
                 const isSelected = city.location.id === selectedLocationId;
                 const hasAqi =
@@ -304,59 +307,59 @@ export default function AirQualityMapSection({
                   city.data.aqi.value !== null;
 
                 return (
-                  <button
-                    key={city.location.id}
-                    type="button"
-                    role="listitem"
-                    onClick={() => onSelectLocation(city.location.id)}
-                    aria-pressed={isSelected}
-                    className={`w-full text-left rounded-xl p-3 border transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-mint ${
-                      isSelected
-                        ? "bg-[#14B8A6]/15 border-theme-mint shadow-sm"
-                        : "bg-theme-card border-theme-border hover:border-theme-accent/60"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-bold text-theme-text">
-                          {city.location.display_name}
+                  <li key={city.location.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectLocation(city.location.id)}
+                      aria-pressed={isSelected}
+                      className={`w-full text-left rounded-xl p-3 border transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-theme-mint ${
+                        isSelected
+                          ? "bg-[#14B8A6]/15 border-theme-mint shadow-sm"
+                          : "bg-theme-card border-theme-border hover:border-theme-accent/60"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-bold text-theme-text">
+                            {city.location.display_name}
+                          </div>
+                          <div className="text-[11px] text-theme-muted">
+                            {city.location.latitude.toFixed(2)}°, {city.location.longitude.toFixed(2)}° •{" "}
+                            {city.data?.observation_time
+                              ? city.data.observation_time
+                              : city.status === "loading"
+                              ? "Loading..."
+                              : "Timestamp unavailable"}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-theme-muted">
-                          {city.location.latitude.toFixed(2)}°, {city.location.longitude.toFixed(2)}° •{" "}
-                          {city.data?.observation_time
-                            ? city.data.observation_time
-                            : city.status === "loading"
-                            ? "Loading..."
-                            : "Timestamp unavailable"}
-                        </div>
-                      </div>
 
-                      <div className="text-right shrink-0">
-                        {hasAqi && city.data ? (
-                          <span
-                            className={`inline-block rounded-lg border px-2.5 py-0.5 text-xs font-extrabold ${getBandBadgeStyle(
-                              city.data.aqi.band
-                            )}`}
-                          >
-                            AQI {city.data.aqi.value}
-                          </span>
-                        ) : city.status === "loading" ? (
-                          <span className="text-xs text-theme-muted italic">...</span>
-                        ) : city.status === "demo-mode" ? (
-                          <span className="rounded-lg border border-amber-400/40 bg-amber-950/60 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                            DEMO MODE
-                          </span>
-                        ) : (
-                          <span className="rounded-lg border border-slate-600/50 bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-slate-300">
-                            UNAVAILABLE
-                          </span>
-                        )}
+                        <div className="text-right shrink-0">
+                          {hasAqi && city.data ? (
+                            <span
+                              className={`inline-block rounded-lg border px-2.5 py-0.5 text-xs font-extrabold ${getBandBadgeStyle(
+                                city.data.aqi.band
+                              )}`}
+                            >
+                              AQI {city.data.aqi.value}
+                            </span>
+                          ) : city.status === "loading" ? (
+                            <span className="text-xs text-theme-muted italic">...</span>
+                          ) : city.status === "demo-mode" ? (
+                            <span className="rounded-lg border border-amber-400/40 bg-amber-950/60 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                              DEMO MODE
+                            </span>
+                          ) : (
+                            <span className="rounded-lg border border-slate-600/50 bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-slate-300">
+                              UNAVAILABLE
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </div>
 
           {/* Selected City Detail Card */}

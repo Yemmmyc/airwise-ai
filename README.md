@@ -214,6 +214,31 @@ npm.cmd run typecheck
 npm.cmd run build
 ```
 
+### Phase 8 — Local Browser & Accessibility QA
+Local browser QA uses **Playwright (Chromium)** and **axe-core** (`@playwright/test`, `@axe-core/playwright`) with deterministic mocked API responses and stubbed offline map tiles—no live backend, external APIs, or Gemini API key are required.
+
+**Prerequisites (first time only):**
+```powershell
+cd C:\Projects\airwise-ai\frontend
+npm.cmd install
+npx.cmd playwright install chromium
+```
+
+**Execution (Windows PowerShell):**
+```powershell
+cd C:\Projects\airwise-ai\frontend
+
+# 1. Build the local production bundle (required after any frontend source changes)
+npm.cmd run build
+
+# 2. Run the complete Playwright QA suite (24 tests: functional, responsive, accessibility)
+npm.cmd run test:e2e
+
+# 3. Run only the WCAG 2.1 A/AA axe-core & keyboard accessibility suite (6 tests)
+npm.cmd run test:e2e:a11y
+```
+> **Important:** `playwright.config.ts` starts the compiled local production server (`npm.cmd run start`) on `http://localhost:3000`. Always re-run `npm.cmd run build` after frontend source changes before executing `npm.cmd run test:e2e` or `npm.cmd run test:e2e:a11y`.
+
 ---
 
 ## 8. Troubleshooting (Windows 11)

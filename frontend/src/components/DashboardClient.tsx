@@ -216,8 +216,11 @@ export default function DashboardClient() {
   const requestSeqRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastKnownByLocationRef = useRef<Record<string, AirQualityResponse>>({});
+  const isDemoModeRef = useRef<boolean>(false);
 
   const loadLiveLocationData = useCallback(async (locationId: string) => {
+    isDemoModeRef.current = false;
+
     // Cancel any in-flight request from a previous location selection
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -291,6 +294,15 @@ export default function DashboardClient() {
   }, []);
 
   useEffect(() => {
+    if (isDemoModeRef.current) {
+      const fallbackData = getClientFallbackDashboard(selectedLocationId);
+      setDemoDashboard(fallbackData);
+      if (fallbackData.assistant_preview.sample_prompts.length > 0) {
+        setActivePromptId(fallbackData.assistant_preview.sample_prompts[0].id);
+      }
+      return;
+    }
+
     void loadLiveLocationData(selectedLocationId);
     return () => {
       if (abortControllerRef.current) {
@@ -305,19 +317,25 @@ export default function DashboardClient() {
 
   const handleQuickLocationSelect = (locationId: string) => {
     if (locationId === selectedLocationId) {
-      void loadLiveLocationData(locationId);
+      if (!isDemoModeRef.current) {
+        void loadLiveLocationData(locationId);
+      }
     } else {
       setSelectedLocationId(locationId);
     }
   };
 
   const handleActivateExplicitDemoFallback = () => {
+    isDemoModeRef.current = true;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     requestSeqRef.current += 1;
     const fallbackData = getClientFallbackDashboard(selectedLocationId);
     setDemoDashboard(fallbackData);
+    if (fallbackData.assistant_preview.sample_prompts.length > 0) {
+      setActivePromptId(fallbackData.assistant_preview.sample_prompts[0].id);
+    }
     setViewMode("demo-fallback");
   };
 
@@ -662,14 +680,14 @@ export default function DashboardClient() {
           aria-live="polite"
           className="bg-theme-card border-b border-theme-border px-4 py-3 sm:px-8"
         >
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-start sm:items-center gap-3">
+          <div className="max-w-7xl mx-auto flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
               {viewMode === "live-model" && liveAirQuality && (
                 <>
-                  <span className="inline-flex shrink-0 items-center rounded-md bg-emerald-500/20 border border-emerald-400/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-300">
+                  <span className="inline-flex self-start sm:self-auto max-w-full sm:shrink-0 items-center rounded-md bg-emerald-500/20 border border-emerald-400/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-300">
                     {liveAirQuality.data_label}
                   </span>
-                  <p className="text-xs sm:text-sm font-medium text-theme-text">
+                  <p className="min-w-0 text-xs sm:text-sm font-medium text-theme-text">
                     {liveAirQuality.provider} —{" "}
                     <span className="font-normal text-theme-muted">
                       {liveAirQuality.disclaimer}
@@ -680,10 +698,10 @@ export default function DashboardClient() {
 
               {viewMode === "stale-cached" && liveAirQuality && (
                 <>
-                  <span className="inline-flex shrink-0 items-center rounded-md bg-amber-500/20 border border-amber-400/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-300">
+                  <span className="inline-flex self-start sm:self-auto max-w-full sm:shrink-0 items-center rounded-md bg-amber-500/20 border border-amber-400/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-300">
                     CACHED / STALE — {liveAirQuality.data_label}
                   </span>
-                  <p className="text-xs sm:text-sm font-medium text-theme-text">
+                  <p className="min-w-0 text-xs sm:text-sm font-medium text-theme-text">
                     Showing last verified model response from{" "}
                     {liveAirQuality.retrieval_time} —{" "}
                     <span className="font-normal text-theme-muted">
@@ -695,10 +713,10 @@ export default function DashboardClient() {
 
               {viewMode === "unavailable" && (
                 <>
-                  <span className="inline-flex shrink-0 items-center rounded-md bg-red-500/20 border border-red-400/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-red-300">
+                  <span className="inline-flex self-start sm:self-auto max-w-full sm:shrink-0 items-center rounded-md bg-red-500/20 border border-red-400/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-red-300">
                     DATA UNAVAILABLE
                   </span>
-                  <p className="text-xs sm:text-sm font-medium text-theme-text">
+                  <p className="min-w-0 text-xs sm:text-sm font-medium text-theme-text">
                     Live Open-Meteo model data could not be loaded for{" "}
                     {activeLocation.display_name}.{" "}
                     <span className="font-normal text-theme-muted">
@@ -710,10 +728,10 @@ export default function DashboardClient() {
 
               {viewMode === "demo-fallback" && (
                 <>
-                  <span className="inline-flex shrink-0 items-center rounded-md bg-amber-500/20 border border-amber-400/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-300">
+                  <span className="inline-flex self-start sm:self-auto max-w-full sm:shrink-0 items-center rounded-md bg-amber-500/20 border border-amber-400/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-300">
                     DEMO DATA
                   </span>
-                  <p className="text-xs sm:text-sm font-medium text-theme-text">
+                  <p className="min-w-0 text-xs sm:text-sm font-medium text-theme-text">
                     {demoDashboard.data_source_label} —{" "}
                     <span className="font-normal text-theme-muted">
                       {demoDashboard.disclaimer}
@@ -724,10 +742,10 @@ export default function DashboardClient() {
 
               {viewMode === "loading" && (
                 <>
-                  <span className="inline-flex shrink-0 items-center rounded-md bg-theme-secondary border border-theme-accent/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-theme-mint">
+                  <span className="inline-flex self-start sm:self-auto max-w-full sm:shrink-0 items-center rounded-md bg-theme-secondary border border-theme-accent/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-theme-mint">
                     SYNCING LIVE MODEL
                   </span>
-                  <p className="text-xs sm:text-sm font-medium text-theme-muted">
+                  <p className="min-w-0 text-xs sm:text-sm font-medium text-theme-muted">
                     Requesting Open-Meteo CAMS Global model estimates for{" "}
                     <strong className="text-theme-text">
                       {activeLocation.display_name}
@@ -738,7 +756,7 @@ export default function DashboardClient() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            <div className="flex flex-wrap items-center gap-2 shrink-0 self-start xl:self-auto">
               <button
                 type="button"
                 onClick={() => void loadLiveLocationData(selectedLocationId)}
