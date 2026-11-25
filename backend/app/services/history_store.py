@@ -13,13 +13,16 @@ Design & Integrity Rules:
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from pathlib import Path
 from typing import Iterable
 
+from app.core.logging_config import get_logger
 from app.schemas.history import HistoricalHourlyRecord
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
+logger = get_logger(__name__)
 
 
 class HistoryStoreError(Exception):
@@ -81,9 +84,38 @@ class SQLiteHistoryStore:
                 conn.commit()
             self._initialized = True
         except (OSError, sqlite3.Error) as exc:
+            logger.error(
+                "history_store_init_failed exc_type=%s",
+                type(exc).__name__,
+            )
             raise HistoryStoreError(
                 f"Failed to initialize historical SQLite store: {type(exc).__name__}"
             ) from exc
+
+    def check_health(self) -> bool:
+        """Verify local SQLite store reachability without mutating data or leaking connections."""
+        try:
+            if self.db_path.exists():
+                with contextlib.closing(self._connect()) as conn:
+                    conn.execute("SELECT 1").fetchone()
+                return True
+
+            # Avoid creating directories or an empty DB file during a read-only health check.
+            if self.db_path.parent.exists() and not self.db_path.parent.is_dir():
+                logger.warning(
+                    "history_store_health_check_failed exc_type=NotADirectoryError"
+                )
+                return False
+
+            with contextlib.closing(sqlite3.connect(":memory:", timeout=5.0)) as conn:
+                conn.execute("SELECT 1").fetchone()
+            return True
+        except (OSError, sqlite3.Error) as exc:
+            logger.warning(
+                "history_store_health_check_failed exc_type=%s",
+                type(exc).__name__,
+            )
+            return False
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path), timeout=5.0)

@@ -23,6 +23,7 @@ from google.genai import errors as genai_errors
 from google.genai import types as genai_types
 
 from app.core.config import Settings, get_settings
+from app.core.logging_config import get_logger
 from app.schemas.air_quality import AirQualityResponse, DataAttribution, DataProvenance
 from app.schemas.assistant import (
     AssistantRequest,
@@ -40,6 +41,9 @@ from app.services.open_meteo import (
     OpenMeteoProviderError,
     fetch_open_meteo_air_quality,
 )
+
+
+logger = get_logger(__name__)
 
 
 class GeminiAssistantError(Exception):
@@ -383,21 +387,28 @@ def _invoke_gemini(
             ),
         )
     except TimeoutError as exc:
+        logger.warning("gemini_invoke_timeout model=%s timeout_s=%.1f", model, timeout_seconds)
         raise GeminiTimeoutError(timeout_seconds) from exc
     except genai_errors.APIError as exc:
         code = getattr(exc, "code", None)
         if code == 429:
+            logger.warning("gemini_invoke_rate_limited model=%s", model)
             raise GeminiRateLimitError() from exc
         if code in (408, 504):
+            logger.warning("gemini_invoke_timeout model=%s status=%s", model, code)
             raise GeminiTimeoutError(timeout_seconds) from exc
+        logger.warning("gemini_invoke_api_error model=%s status=%s", model, code)
         raise GeminiUpstreamServiceError() from exc
     except Exception as exc:
         err_name = type(exc).__name__.lower()
         err_str = str(exc).lower()
         if "timeout" in err_name or "timed out" in err_str:
+            logger.warning("gemini_invoke_timeout model=%s exc_type=%s", model, type(exc).__name__)
             raise GeminiTimeoutError(timeout_seconds) from exc
         if "429" in err_str or "resource_exhausted" in err_str or "rate limit" in err_str:
+            logger.warning("gemini_invoke_rate_limited model=%s exc_type=%s", model, type(exc).__name__)
             raise GeminiRateLimitError() from exc
+        logger.warning("gemini_invoke_upstream_error model=%s exc_type=%s", model, type(exc).__name__)
         raise GeminiUpstreamServiceError() from exc
 
     raw_text = getattr(response, "text", None)
@@ -449,6 +460,11 @@ def ask_airwise_assistant(
 
     cfg = settings or get_settings()
     if genai_client is None and not cfg.gemini_api_key:
+        logger.warning(
+            "gemini_assistant_unavailable location_id=%s mode=%s",
+            location.id,
+            request.mode,
+        )
         raise GeminiNotConfiguredError()
 
     primary_aq, primary_snapshot = _fetch_verified_city_data(location)

@@ -24,12 +24,19 @@ export type PollutantStatus = "Low" | "Moderate" | "Elevated" | "High";
 export type PriorityLevel = "High" | "Medium" | "Informational";
 
 export interface HealthResponse {
-  status: "ok";
+  status: "ok" | "degraded";
   service: string;
   version: string;
   environment: string;
-  data_mode: DataMode;
+  data_mode: DataMode | AirQualityDataMode;
+  /** False on lightweight /health checks (no outbound network probe); use provider_configured. */
   live_provider_connected: boolean;
+  /** Authoritative indicator of whether the Open-Meteo provider URL is configured. */
+  provider_configured?: boolean;
+  provider_name?: string;
+  assistant_configured?: boolean;
+  history_store_status?: "ok" | "unavailable";
+  supported_locations_count?: number;
 }
 
 export interface LocationOption {

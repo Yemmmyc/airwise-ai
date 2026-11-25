@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 
 from app.core.config import Settings, get_settings
+from app.core.logging_config import get_logger
 from app.schemas.air_quality import (
     AirQualityResponse,
     AirQualityUnits,
@@ -57,6 +58,8 @@ OPEN_METEO_VARIABLES: tuple[str, ...] = (
     "ozone",
     "sulphur_dioxide",
 )
+
+logger = get_logger(__name__)
 
 # Known fixed UTC offsets for the configured African IANA timezones as a fallback
 # in case the host Python environment lacks the optional tzdata package on Windows.
@@ -698,13 +701,28 @@ def fetch_open_meteo_air_quality(
                     headers={"Accept": "application/json"},
                 )
     except httpx.TimeoutException as exc:
+        logger.warning(
+            "open_meteo_timeout location_id=%s timeout_s=%.1f",
+            location.id,
+            settings.open_meteo_timeout_seconds,
+        )
         raise OpenMeteoTimeoutError(settings.open_meteo_timeout_seconds) from exc
     except httpx.HTTPError as exc:
+        logger.warning(
+            "open_meteo_http_error location_id=%s exc_type=%s",
+            location.id,
+            type(exc).__name__,
+        )
         raise OpenMeteoUpstreamHttpError(
             "Unable to reach Open-Meteo Air Quality API over HTTP."
         ) from exc
 
     if response.status_code != 200:
+        logger.warning(
+            "open_meteo_upstream_non_200 location_id=%s upstream_status=%d",
+            location.id,
+            response.status_code,
+        )
         raise OpenMeteoUpstreamHttpError(
             f"Open-Meteo returned HTTP {response.status_code}.",
             upstream_status=response.status_code,
@@ -713,6 +731,10 @@ def fetch_open_meteo_air_quality(
     try:
         raw_payload = response.json()
     except ValueError as exc:
+        logger.warning(
+            "open_meteo_invalid_json location_id=%s",
+            location.id,
+        )
         raise OpenMeteoValidationError("Response body was not valid JSON.") from exc
 
     normalized = normalize_open_meteo_payload(

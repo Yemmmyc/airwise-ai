@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query
 from app.core.config import get_settings
+from app.core.logging_config import get_logger
 from app.schemas.air_quality import AirQualityResponse
 from app.schemas.assistant import (
     AssistantRequest,
@@ -14,12 +15,13 @@ from app.schemas.history import (
     HistoricalCityComparisonResponse,
 )
 from app.schemas.intelligence import PredictiveIntelligenceResponse
-from app.services.demo_data import build_demo_dashboard
+from app.services.demo_data import AVAILABLE_LOCATIONS, build_demo_dashboard
 from app.services.gemini_assistant import (
     GeminiAssistantError,
     ask_airwise_assistant,
     get_assistant_status,
 )
+from app.services.history_store import SQLiteHistoryStore
 from app.services.open_meteo import (
     InvalidLocationError,
     OpenMeteoProviderError,
@@ -32,24 +34,47 @@ from app.services.open_meteo_history import (
 from app.services.predictive_intelligence import fetch_predictive_intelligence
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 @router.get(
     "/health",
     response_model=HealthResponse,
     summary="Health Check",
-    description="Returns service operational status and confirms whether default dashboard data mode is demo.",
+    description=(
+        "Returns lightweight runtime health and configuration readiness, including "
+        "active data mode, Open-Meteo provider configuration, SQLite history store status, "
+        "and backend Gemini readiness without exposing secrets."
+    ),
 )
 def get_health() -> HealthResponse:
-    """Return service health metadata."""
+    """Return accurate lightweight runtime health metadata."""
     settings = get_settings()
+    provider_configured = bool(settings.open_meteo_base_url.strip())
+    history_store_ok = SQLiteHistoryStore(settings.history_db_path).check_health()
+    assistant_configured = bool(settings.gemini_api_key)
+
+    overall_status = "ok" if history_store_ok else "degraded"
+    if overall_status != "ok":
+        logger.warning(
+            "health_check_degraded history_store_status=unavailable provider_configured=%s",
+            provider_configured,
+        )
+
     return HealthResponse(
-        status="ok",
+        status=overall_status,
         service=settings.app_name,
         version=settings.app_version,
         environment=settings.environment,
-        data_mode="demo",
+        data_mode="live_model" if provider_configured else "demo",
+        # /health is intentionally lightweight and makes zero outbound network probes,
+        # so live upstream connectivity is not asserted here; use provider_configured instead.
         live_provider_connected=False,
+        provider_configured=provider_configured,
+        provider_name="Open-Meteo (CAMS Global)",
+        assistant_configured=assistant_configured,
+        history_store_status="ok" if history_store_ok else "unavailable",
+        supported_locations_count=len(AVAILABLE_LOCATIONS),
     )
 
 

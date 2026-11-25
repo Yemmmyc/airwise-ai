@@ -24,6 +24,7 @@ from typing import Any
 import httpx
 
 from app.core.config import Settings, get_settings
+from app.core.logging_config import get_logger
 from app.schemas.air_quality import AirQualityUnits, DataAttribution, DataProvenance
 from app.schemas.dashboard import LocationOption
 from app.schemas.history import (
@@ -55,6 +56,7 @@ from app.services.open_meteo import (
 )
 
 SUPPORTED_HISTORY_DAYS: tuple[int, ...] = (7, 14, 30)
+logger = get_logger(__name__)
 
 
 class InvalidHistoryRangeError(OpenMeteoProviderError):
@@ -581,6 +583,11 @@ def fetch_historical_air_quality(
             end_utc=end_utc_str,
         )
     except HistoryStoreError:
+        logger.warning(
+            "history_sqlite_read_failed location_id=%s days=%d",
+            location.id,
+            range_days,
+        )
         persisted_records = []
         persisted_latest_retrieval = None
 
@@ -646,6 +653,12 @@ def fetch_historical_air_quality(
         )
     except httpx.TimeoutException as exc:
         provider_err: OpenMeteoProviderError = OpenMeteoTimeoutError(cfg.history_timeout_seconds)
+        logger.warning(
+            "history_upstream_timeout location_id=%s days=%d fallback_available=%s",
+            location.id,
+            range_days,
+            bool(persisted_records),
+        )
         if persisted_records:
             return _assemble_history_response(
                 location=location,
@@ -667,6 +680,13 @@ def fetch_historical_air_quality(
         provider_err = OpenMeteoUpstreamHttpError(
             "Unable to reach Open-Meteo Air Quality API for historical data."
         )
+        logger.warning(
+            "history_upstream_http_error location_id=%s days=%d exc_type=%s fallback_available=%s",
+            location.id,
+            range_days,
+            type(exc).__name__,
+            bool(persisted_records),
+        )
         if persisted_records:
             return _assemble_history_response(
                 location=location,
@@ -685,6 +705,13 @@ def fetch_historical_air_quality(
             )
         raise provider_err from exc
     except OpenMeteoProviderError as exc:
+        logger.warning(
+            "history_upstream_provider_error location_id=%s days=%d error_code=%s fallback_available=%s",
+            location.id,
+            range_days,
+            exc.error_code,
+            bool(persisted_records),
+        )
         if persisted_records:
             return _assemble_history_response(
                 location=location,
@@ -710,6 +737,11 @@ def fetch_historical_air_quality(
             history_store.upsert_records(location.id, records)
             persisted_ok = True
     except HistoryStoreError:
+        logger.warning(
+            "history_sqlite_persist_failed location_id=%s days=%d",
+            location.id,
+            range_days,
+        )
         persisted_ok = False
 
     response = _assemble_history_response(

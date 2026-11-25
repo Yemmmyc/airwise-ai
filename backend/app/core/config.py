@@ -9,8 +9,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables or .env file."""
 
     app_name: str = "AIRWISE AI API"
-    app_version: str = "0.3.0"
+    app_version: str = "0.9.1"
     environment: str = "development"
+    log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
     allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     default_location_id: str = "lagos-ng"

@@ -5,6 +5,9 @@ from pydantic import BaseModel, Field
 
 
 DataMode = Literal["demo"]
+HealthStatus = Literal["ok", "degraded"]
+HealthDataMode = Literal["live_model", "demo"]
+HistoryStoreHealthStatus = Literal["ok", "unavailable"]
 AqiBand = Literal[
     "Good",
     "Moderate",
@@ -18,19 +21,47 @@ PriorityLevel = Literal["High", "Medium", "Informational"]
 
 
 class HealthResponse(BaseModel):
-    """Health check response schema."""
+    """Lightweight runtime health and configuration readiness response schema."""
 
-    status: Literal["ok"] = Field(default="ok", description="Service operational status")
+    status: HealthStatus = Field(
+        default="ok",
+        description="Overall runtime health status ('ok' or 'degraded')",
+    )
     service: str = Field(..., description="Application service name")
     version: str = Field(..., description="API semantic version")
     environment: str = Field(..., description="Runtime environment name")
-    data_mode: DataMode = Field(
-        default="demo",
-        description="Explicit indicator that environmental data is currently sample/demo data",
+    data_mode: HealthDataMode = Field(
+        default="live_model",
+        description="Active configured environmental data mode ('live_model' or 'demo')",
     )
     live_provider_connected: bool = Field(
         default=False,
-        description="False until a verified live air quality telemetry provider is configured",
+        description=(
+            "True only when live upstream connectivity has been verified. "
+            "Always False on lightweight /health checks (which perform no outbound network probes); "
+            "use provider_configured to check whether the upstream provider URL is configured."
+        ),
+    )
+    provider_configured: bool = Field(
+        default=True,
+        description="Authoritative indicator: True when Open-Meteo CAMS Global provider URL is configured",
+    )
+    provider_name: str = Field(
+        default="Open-Meteo (CAMS Global)",
+        description="Configured primary atmospheric model provider name",
+    )
+    assistant_configured: bool = Field(
+        default=False,
+        description="True when backend Gemini credentials are configured (never exposes secrets)",
+    )
+    history_store_status: HistoryStoreHealthStatus = Field(
+        default="ok",
+        description="Local SQLite historical store readiness ('ok' or 'unavailable')",
+    )
+    supported_locations_count: int = Field(
+        default=4,
+        ge=0,
+        description="Number of configured canonical urban locations",
     )
 
 

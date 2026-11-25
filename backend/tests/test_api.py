@@ -149,16 +149,21 @@ def _mock_httpx_client_get(
 # ============================================================================
 
 
-def test_health_endpoint_returns_ok_and_demo_mode() -> None:
-    """Verify GET /api/v1/health returns status ok and explicit demo data mode."""
+def test_health_endpoint_returns_ok_and_runtime_readiness() -> None:
+    """Verify GET /api/v1/health returns truthful runtime readiness and version metadata."""
     response = client.get("/api/v1/health")
     assert response.status_code == 200
+    assert response.headers.get("X-Request-ID")
 
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["service"] == "AIRWISE AI API"
-    assert payload["data_mode"] == "demo"
+    assert payload["data_mode"] == "live_model"
+    assert payload["provider_configured"] is True
     assert payload["live_provider_connected"] is False
+    assert payload["history_store_status"] == "ok"
+    assert payload["supported_locations_count"] == len(AVAILABLE_LOCATIONS)
+    assert isinstance(payload["assistant_configured"], bool)
 
 
 def test_dashboard_endpoint_defaults_to_lagos_and_labels_demo_data() -> None:
