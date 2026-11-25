@@ -683,7 +683,12 @@ def fetch_open_meteo_air_quality(
             return cached_copy
 
     params = build_query_params(location, settings)
-    timeout = httpx.Timeout(settings.open_meteo_timeout_seconds)
+    timeout = httpx.Timeout(
+        connect=min(5.0, settings.open_meteo_timeout_seconds),
+        read=settings.open_meteo_timeout_seconds,
+        write=5.0,
+        pool=5.0,
+    )
 
     try:
         if http_client is not None:

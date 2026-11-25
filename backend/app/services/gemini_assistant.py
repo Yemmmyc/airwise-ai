@@ -18,6 +18,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types as genai_types
@@ -228,10 +229,12 @@ def _build_verified_snapshot(
 
 def _fetch_verified_city_data(
     location: LocationOption,
+    *,
+    http_client: httpx.Client | None = None,
 ) -> tuple[AirQualityResponse | None, VerifiedCitySnapshot]:
     """Fetch verified Open-Meteo data for one location without throwing on provider outage."""
     try:
-        aq = fetch_open_meteo_air_quality(location_id=location.id)
+        aq = fetch_open_meteo_air_quality(location_id=location.id, http_client=http_client)
         return aq, _build_verified_snapshot(location, aq)
     except OpenMeteoProviderError as exc:
         return None, _build_verified_snapshot(location, None, error_notice=exc.message)
@@ -445,6 +448,7 @@ def ask_airwise_assistant(
     *,
     settings: Settings | None = None,
     genai_client: genai.Client | None = None,
+    http_client: httpx.Client | None = None,
 ) -> AssistantResponse:
     """Execute a grounded AIRWISE AI Gemini assistant query.
 
@@ -467,7 +471,9 @@ def ask_airwise_assistant(
         )
         raise GeminiNotConfiguredError()
 
-    primary_aq, primary_snapshot = _fetch_verified_city_data(location)
+    primary_aq, primary_snapshot = _fetch_verified_city_data(
+        location, http_client=http_client
+    )
 
     city_comparisons: list[VerifiedCitySnapshot] = []
     if request.mode == "city_comparison":
@@ -475,7 +481,7 @@ def ask_airwise_assistant(
             if loc.id == location.id:
                 city_comparisons.append(primary_snapshot)
             else:
-                _, snap = _fetch_verified_city_data(loc)
+                _, snap = _fetch_verified_city_data(loc, http_client=http_client)
                 city_comparisons.append(snap)
 
     system_instruction = _build_system_instruction()

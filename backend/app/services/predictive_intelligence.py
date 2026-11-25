@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any
 
+import httpx
+
 from app.schemas.air_quality import AirQualityResponse, HourlyForecastPoint
 from app.schemas.dashboard import AqiBand
 from app.schemas.intelligence import (
@@ -1117,7 +1119,8 @@ def fetch_predictive_intelligence(
     location_id: str = "lagos-ng",
     *,
     config: IntelligenceConfig = INTELLIGENCE_CONFIG,
+    http_client: httpx.Client | None = None,
 ) -> PredictiveIntelligenceResponse:
     """Fetch authoritative Open-Meteo forecast for `location_id` and compute deterministic intelligence."""
-    aq = fetch_open_meteo_air_quality(location_id=location_id)
+    aq = fetch_open_meteo_air_quality(location_id=location_id, http_client=http_client)
     return compute_predictive_intelligence_from_forecast(aq, config=config)

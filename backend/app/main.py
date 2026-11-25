@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 import time
 
+import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -20,6 +23,41 @@ from app.core.logging_config import (
 )
 
 logger = get_logger(__name__)
+
+_HTTP_POOL_LIMITS = httpx.Limits(
+    max_connections=20,
+    max_keepalive_connections=10,
+    keepalive_expiry=30.0,
+)
+
+
+@asynccontextmanager
+async def _app_lifespan(application: FastAPI) -> AsyncIterator[None]:
+    """Manage application-scoped shared synchronous HTTP client lifecycle."""
+    shared_client = httpx.Client(
+        limits=_HTTP_POOL_LIMITS,
+        headers={"Accept": "application/json"},
+    )
+    application.state.http_client = shared_client
+    logger.info(
+        "app_lifespan_started max_connections=%d max_keepalive=%d keepalive_expiry_s=%.1f",
+        _HTTP_POOL_LIMITS.max_connections,
+        _HTTP_POOL_LIMITS.max_keepalive_connections,
+        _HTTP_POOL_LIMITS.keepalive_expiry,
+    )
+    try:
+        yield
+    finally:
+        try:
+            shared_client.close()
+        except Exception as exc:
+            logger.warning(
+                "app_lifespan_http_client_close_failed exc_type=%s",
+                type(exc).__name__,
+            )
+        finally:
+            application.state.http_client = None
+            logger.info("app_lifespan_shutdown_complete")
 
 
 def create_app() -> FastAPI:
@@ -38,7 +76,9 @@ def create_app() -> FastAPI:
         ),
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=_app_lifespan,
     )
+    application.state.http_client = None
 
     @application.middleware("http")
     async def request_correlation_middleware(request: Request, call_next) -> Response:

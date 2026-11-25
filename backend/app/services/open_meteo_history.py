@@ -523,6 +523,7 @@ def fetch_historical_air_quality(
     use_cache: bool = True,
     settings: Settings | None = None,
     store: SQLiteHistoryStore | None = None,
+    http_client: httpx.Client | None = None,
     now_utc: datetime | None = None,
 ) -> HistoricalAirQualityResponse:
     """Retrieve genuine historical CAMS Global model air quality data with hybrid SQLite persistence.
@@ -624,16 +625,29 @@ def fetch_historical_air_quality(
 
     # Perform fresh upstream retrieval from Open-Meteo
     params = build_history_query_params(location, range_days, cfg)
-    timeout = httpx.Timeout(cfg.history_timeout_seconds)
+    timeout = httpx.Timeout(
+        connect=min(5.0, cfg.history_timeout_seconds),
+        read=cfg.history_timeout_seconds,
+        write=5.0,
+        pool=5.0,
+    )
     retrieval_iso = current_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     try:
-        with httpx.Client(timeout=timeout) as client:
-            http_res = client.get(
+        if http_client is not None:
+            http_res = http_client.get(
                 cfg.open_meteo_base_url,
                 params=params,
+                timeout=timeout,
                 headers={"Accept": "application/json"},
             )
+        else:
+            with httpx.Client(timeout=timeout) as client:
+                http_res = client.get(
+                    cfg.open_meteo_base_url,
+                    params=params,
+                    headers={"Accept": "application/json"},
+                )
         if http_res.status_code != 200:
             raise OpenMeteoUpstreamHttpError(
                 f"Open-Meteo historical query returned HTTP {http_res.status_code}.",
@@ -777,6 +791,7 @@ def fetch_historical_city_comparison(
     force_refresh: bool = False,
     settings: Settings | None = None,
     store: SQLiteHistoryStore | None = None,
+    http_client: httpx.Client | None = None,
     now_utc: datetime | None = None,
 ) -> HistoricalCityComparisonResponse:
     """Fetch historical summaries for all four configured cities with fault isolation per city.
@@ -799,6 +814,7 @@ def fetch_historical_city_comparison(
                 force_refresh=force_refresh,
                 settings=cfg,
                 store=store,
+                http_client=http_client,
                 now_utc=current_utc,
             )
             return CityHistoricalComparisonItem(

@@ -1,6 +1,7 @@
 """API v1 endpoints for health check, demo dashboard, Open-Meteo model air quality, and Gemini AI assistant."""
 
-from fastapi import APIRouter, HTTPException, Query
+import httpx
+from fastapi import APIRouter, HTTPException, Query, Request
 from app.core.config import get_settings
 from app.core.logging_config import get_logger
 from app.schemas.air_quality import AirQualityResponse
@@ -35,6 +36,11 @@ from app.services.predictive_intelligence import fetch_predictive_intelligence
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _get_shared_http_client(request: Request) -> httpx.Client | None:
+    """Return the application-lifespan shared HTTP client if active, else None."""
+    return getattr(request.app.state, "http_client", None)
 
 
 @router.get(
@@ -112,6 +118,7 @@ def get_dashboard(
     ),
 )
 def get_air_quality(
+    request: Request,
     location_id: str = Query(
         default="lagos-ng",
         min_length=2,
@@ -122,7 +129,10 @@ def get_air_quality(
 ) -> AirQualityResponse:
     """Return normalized Open-Meteo model-based air quality payload or structured error."""
     try:
-        return fetch_open_meteo_air_quality(location_id=location_id)
+        return fetch_open_meteo_air_quality(
+            location_id=location_id,
+            http_client=_get_shared_http_client(request),
+        )
     except OpenMeteoProviderError as exc:
         raise HTTPException(
             status_code=exc.status_code,
@@ -147,6 +157,7 @@ def get_air_quality(
     ),
 )
 def get_air_quality_history(
+    request: Request,
     location_id: str = Query(
         default="lagos-ng",
         min_length=2,
@@ -169,6 +180,7 @@ def get_air_quality_history(
             location_id=location_id,
             days=days,
             force_refresh=force_refresh,
+            http_client=_get_shared_http_client(request),
         )
     except OpenMeteoProviderError as exc:
         raise HTTPException(
@@ -194,6 +206,7 @@ def get_air_quality_history(
     ),
 )
 def get_air_quality_history_compare(
+    request: Request,
     days: int = Query(
         default=7,
         description="Historical range in days: 7, 14, or 30",
@@ -208,6 +221,7 @@ def get_air_quality_history_compare(
         return fetch_historical_city_comparison(
             days=days,
             force_refresh=force_refresh,
+            http_client=_get_shared_http_client(request),
         )
     except OpenMeteoProviderError as exc:
         raise HTTPException(
@@ -233,6 +247,7 @@ def get_air_quality_history_compare(
     ),
 )
 def get_air_quality_intelligence(
+    request: Request,
     location_id: str = Query(
         default="lagos-ng",
         min_length=2,
@@ -243,7 +258,10 @@ def get_air_quality_intelligence(
 ) -> PredictiveIntelligenceResponse:
     """Return deterministic predictive intelligence for the requested canonical location."""
     try:
-        return fetch_predictive_intelligence(location_id=location_id)
+        return fetch_predictive_intelligence(
+            location_id=location_id,
+            http_client=_get_shared_http_client(request),
+        )
     except OpenMeteoProviderError as exc:
         raise HTTPException(
             status_code=exc.status_code,
@@ -280,10 +298,16 @@ def get_airwise_assistant_status() -> AssistantStatusResponse:
         "Open-Meteo CAMS Global model data. Returns HTTP 503 when GEMINI_API_KEY is not configured."
     ),
 )
-def post_airwise_assistant_ask(payload: AssistantRequest) -> AssistantResponse:
+def post_airwise_assistant_ask(
+    request: Request,
+    payload: AssistantRequest,
+) -> AssistantResponse:
     """Execute a grounded Gemini assistant request or return a clean structured error."""
     try:
-        return ask_airwise_assistant(payload)
+        return ask_airwise_assistant(
+            payload,
+            http_client=_get_shared_http_client(request),
+        )
     except InvalidLocationError as exc:
         raise HTTPException(
             status_code=exc.status_code,
