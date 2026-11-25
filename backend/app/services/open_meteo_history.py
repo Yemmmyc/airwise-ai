@@ -25,6 +25,7 @@ import httpx
 
 from app.core.config import Settings, get_settings
 from app.core.logging_config import get_logger
+from app.core.ttl_cache import SingleFlightTTLCache
 from app.schemas.air_quality import AirQualityUnits, DataAttribution, DataProvenance
 from app.schemas.dashboard import LocationOption
 from app.schemas.history import (
@@ -70,21 +71,13 @@ class InvalidHistoryRangeError(OpenMeteoProviderError):
         )
 
 
-class _HistoryCacheEntry:
-    """In-memory TTL cache entry strictly for validated historical responses."""
-
-    __slots__ = ("expires_at", "response")
-
-    def __init__(self, response: HistoricalAirQualityResponse, expires_at: float) -> None:
-        self.response = response
-        self.expires_at = expires_at
-
-
-_HISTORY_CACHE: dict[tuple[str, int], _HistoryCacheEntry] = {}
+_HISTORY_CACHE: SingleFlightTTLCache[
+    tuple[str, int], HistoricalAirQualityResponse
+] = SingleFlightTTLCache()
 
 
 def clear_history_cache() -> None:
-    """Clear the dedicated in-memory historical TTL cache."""
+    """Clear the dedicated in-memory historical TTL cache safely (preserving per-key locks)."""
     _HISTORY_CACHE.clear()
 
 
@@ -515,51 +508,26 @@ def _assemble_history_response(
     )
 
 
-def fetch_historical_air_quality(
-    location_id: str = "lagos-ng",
-    *,
-    days: int = 7,
-    force_refresh: bool = False,
-    use_cache: bool = True,
-    settings: Settings | None = None,
-    store: SQLiteHistoryStore | None = None,
-    http_client: httpx.Client | None = None,
-    now_utc: datetime | None = None,
+def _mark_history_cache_hit(
+    response: HistoricalAirQualityResponse,
 ) -> HistoricalAirQualityResponse:
-    """Retrieve genuine historical CAMS Global model air quality data with hybrid SQLite persistence.
+    response.origin.storage_origin = "historical_cache"
+    response.origin.cache_hit = True
+    response.provenance.cache_hit = True
+    return response
 
-    Resolution order:
-    1. Validate `location_id` (404) and `days` in {7, 14, 30} (422).
-    2. Check dedicated in-memory historical TTL cache (unless `force_refresh=True`).
-    3. Check local SQLite persisted records if fresh within `history_refresh_max_age_seconds`.
-    4. Query Open-Meteo historical endpoint (`past_days=days`, `forecast_days=0`), validate,
-       exclude future timestamps, upsert into SQLite, and cache the successful result.
-    5. If upstream Open-Meteo fails (timeout/HTTP/validation) and valid persisted SQLite records
-       exist for this window, return them with `storage_origin="persisted_database_fallback"` and
-       the error reason—never reporting persisted records as a fresh retrieval and never mixing demo data.
-    """
-    location = get_location_by_id(location_id)
-    if location is None:
-        raise InvalidLocationError(location_id)
 
-    if days not in SUPPORTED_HISTORY_DAYS:
-        raise InvalidHistoryRangeError(days)
-
-    range_days: HistoricalRangeDays = days  # type: ignore[assignment]
-    cfg = settings or get_settings()
-    current_utc = now_utc or datetime.now(timezone.utc)
-    now_mono = time.monotonic()
-
-    cache_key = (location.id, range_days)
-    if use_cache and not force_refresh and cfg.history_cache_ttl_seconds > 0:
-        cached = _HISTORY_CACHE.get(cache_key)
-        if cached is not None and cached.expires_at > now_mono:
-            cached_copy = cached.response.model_copy(deep=True)
-            cached_copy.origin.storage_origin = "historical_cache"
-            cached_copy.origin.cache_hit = True
-            cached_copy.provenance.cache_hit = True
-            return cached_copy
-
+def _resolve_historical_uncached(
+    *,
+    location: LocationOption,
+    range_days: HistoricalRangeDays,
+    force_refresh: bool,
+    cfg: Settings,
+    store: SQLiteHistoryStore | None,
+    http_client: httpx.Client | None,
+    current_utc: datetime,
+) -> HistoricalAirQualityResponse:
+    """Resolve historical data from fresh SQLite records, upstream Open-Meteo, or SQLite fallback."""
     start_date, end_date, start_utc_dt, end_utc_dt = _compute_local_date_window(
         location, range_days, current_utc
     )
@@ -600,7 +568,7 @@ def fetch_historical_air_quality(
         now_utc=current_utc,
         max_age_seconds=cfg.history_refresh_max_age_seconds,
     ):
-        response = _assemble_history_response(
+        return _assemble_history_response(
             location=location,
             days=range_days,
             start_date=start_date,
@@ -616,12 +584,6 @@ def fetch_historical_air_quality(
             fallback_reason=None,
             settings=cfg,
         )
-        if use_cache and cfg.history_cache_ttl_seconds > 0:
-            _HISTORY_CACHE[cache_key] = _HistoryCacheEntry(
-                response=response,
-                expires_at=now_mono + float(cfg.history_cache_ttl_seconds),
-            )
-        return response
 
     # Perform fresh upstream retrieval from Open-Meteo
     params = build_history_query_params(location, range_days, cfg)
@@ -758,7 +720,7 @@ def fetch_historical_air_quality(
         )
         persisted_ok = False
 
-    response = _assemble_history_response(
+    return _assemble_history_response(
         location=location,
         days=range_days,
         start_date=start_date,
@@ -776,13 +738,85 @@ def fetch_historical_air_quality(
         provider_lon=provider_lon,
     )
 
-    if use_cache and cfg.history_cache_ttl_seconds > 0:
-        _HISTORY_CACHE[cache_key] = _HistoryCacheEntry(
-            response=response,
-            expires_at=now_mono + float(cfg.history_cache_ttl_seconds),
+
+def fetch_historical_air_quality(
+    location_id: str = "lagos-ng",
+    *,
+    days: int = 7,
+    force_refresh: bool = False,
+    use_cache: bool = True,
+    settings: Settings | None = None,
+    store: SQLiteHistoryStore | None = None,
+    http_client: httpx.Client | None = None,
+    now_utc: datetime | None = None,
+) -> HistoricalAirQualityResponse:
+    """Retrieve genuine historical CAMS Global model air quality data with hybrid SQLite persistence.
+
+    Resolution order:
+    1. Validate `location_id` (404) and `days` in {7, 14, 30} (422).
+    2. Check dedicated thread-safe in-memory historical TTL cache (unless `force_refresh=True`).
+    3. Serialize same-key misses / force-refreshes via per-key lock with double-checked read.
+    4. Check local SQLite persisted records if fresh within `history_refresh_max_age_seconds`.
+    5. Query Open-Meteo historical endpoint (`past_days=days`, `forecast_days=0`), validate,
+       exclude future timestamps, upsert into SQLite, and cache the successful result.
+    6. If upstream Open-Meteo fails (timeout/HTTP/validation) and valid persisted SQLite records
+       exist for this window, return them with `storage_origin="persisted_database_fallback"` and
+       the error reason—never reporting persisted records as a fresh retrieval and never mixing demo data.
+    """
+    location = get_location_by_id(location_id)
+    if location is None:
+        raise InvalidLocationError(location_id)
+
+    if days not in SUPPORTED_HISTORY_DAYS:
+        raise InvalidHistoryRangeError(days)
+
+    range_days: HistoricalRangeDays = days  # type: ignore[assignment]
+    cfg = settings or get_settings()
+    current_utc = now_utc or datetime.now(timezone.utc)
+    ttl = cfg.history_cache_ttl_seconds
+    cache_enabled = use_cache and ttl > 0
+    cache_key = (location.id, range_days)
+
+    # Explicit uncached, non-forced bypass: do not read, write, or lock the shared cache.
+    if not cache_enabled and not force_refresh:
+        return _resolve_historical_uncached(
+            location=location,
+            range_days=range_days,
+            force_refresh=False,
+            cfg=cfg,
+            store=store,
+            http_client=http_client,
+            current_utc=current_utc,
         )
 
-    return response
+    # Fast-path cache read without contending on per-key I/O locks.
+    if cache_enabled and not force_refresh:
+        cached = _HISTORY_CACHE.get(cache_key)
+        if cached is not None:
+            return _mark_history_cache_hit(cached)
+
+    with _HISTORY_CACHE.key_lock(cache_key):
+        # Double-check after acquiring per-key lock unless force_refresh was requested.
+        if cache_enabled and not force_refresh:
+            cached = _HISTORY_CACHE.get(cache_key)
+            if cached is not None:
+                return _mark_history_cache_hit(cached)
+
+        response = _resolve_historical_uncached(
+            location=location,
+            range_days=range_days,
+            force_refresh=force_refresh,
+            cfg=cfg,
+            store=store,
+            http_client=http_client,
+            current_utc=current_utc,
+        )
+
+        # Preserve existing rule: never cache persisted_database_fallback responses.
+        if cache_enabled and response.origin.storage_origin != "persisted_database_fallback":
+            _HISTORY_CACHE.set(cache_key, response, ttl)
+
+        return response
 
 
 def fetch_historical_city_comparison(

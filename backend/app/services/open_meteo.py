@@ -34,6 +34,7 @@ import httpx
 
 from app.core.config import Settings, get_settings
 from app.core.logging_config import get_logger
+from app.core.ttl_cache import SingleFlightTTLCache
 from app.schemas.air_quality import (
     AirQualityResponse,
     AirQualityUnits,
@@ -140,21 +141,11 @@ class OpenMeteoValidationError(OpenMeteoProviderError):
         )
 
 
-class _CacheEntry:
-    """In-memory TTL cache entry for validated AirQualityResponse objects."""
-
-    __slots__ = ("expires_at", "response")
-
-    def __init__(self, response: AirQualityResponse, expires_at: float) -> None:
-        self.response = response
-        self.expires_at = expires_at
-
-
-_RESPONSE_CACHE: dict[str, _CacheEntry] = {}
+_RESPONSE_CACHE: SingleFlightTTLCache[str, AirQualityResponse] = SingleFlightTTLCache()
 
 
 def clear_open_meteo_cache() -> None:
-    """Clear the in-memory Open-Meteo response cache (useful for deterministic testing)."""
+    """Clear the in-memory Open-Meteo response cache safely (preserving per-key locks)."""
     _RESPONSE_CACHE.clear()
 
 
@@ -655,33 +646,18 @@ def normalize_open_meteo_payload(
     )
 
 
-def fetch_open_meteo_air_quality(
-    location_id: str = "lagos-ng",
+def _mark_live_cache_hit(response: AirQualityResponse) -> AirQualityResponse:
+    response.provenance.cache_hit = True
+    return response
+
+
+def _fetch_and_normalize_open_meteo(
+    location: LocationOption,
+    settings: Settings,
     *,
     http_client: httpx.Client | None = None,
-    use_cache: bool = True,
 ) -> AirQualityResponse:
-    """Fetch and normalize Open-Meteo model air quality data for a configured location.
-
-    - Reuses the single configured location registry (Lagos, Abuja, Nairobi, Accra).
-    - Raises InvalidLocationError (404) if location_id is not recognized.
-    - Uses a short-lived in-memory TTL cache for successful responses only.
-    - Never caches errors and never substitutes demo values.
-    """
-    location = get_location_by_id(location_id)
-    if location is None:
-        raise InvalidLocationError(location_id)
-
-    settings = get_settings()
-    now_monotonic = time.monotonic()
-
-    if use_cache and settings.open_meteo_cache_ttl_seconds > 0:
-        cached = _RESPONSE_CACHE.get(location.id)
-        if cached is not None and cached.expires_at > now_monotonic:
-            cached_copy = cached.response.model_copy(deep=True)
-            cached_copy.provenance.cache_hit = True
-            return cached_copy
-
+    """Perform the upstream Open-Meteo HTTP GET and normalize the validated payload."""
     params = build_query_params(location, settings)
     timeout = httpx.Timeout(
         connect=min(5.0, settings.open_meteo_timeout_seconds),
@@ -742,17 +718,57 @@ def fetch_open_meteo_air_quality(
         )
         raise OpenMeteoValidationError("Response body was not valid JSON.") from exc
 
-    normalized = normalize_open_meteo_payload(
+    return normalize_open_meteo_payload(
         raw_payload,
         location=location,
         settings=settings,
         cache_hit=False,
     )
 
-    if use_cache and settings.open_meteo_cache_ttl_seconds > 0:
-        _RESPONSE_CACHE[location.id] = _CacheEntry(
-            response=normalized,
-            expires_at=now_monotonic + float(settings.open_meteo_cache_ttl_seconds),
+
+def fetch_open_meteo_air_quality(
+    location_id: str = "lagos-ng",
+    *,
+    http_client: httpx.Client | None = None,
+    use_cache: bool = True,
+) -> AirQualityResponse:
+    """Fetch and normalize Open-Meteo model air quality data for a configured location.
+
+    - Reuses the single configured location registry (Lagos, Abuja, Nairobi, Accra).
+    - Raises InvalidLocationError (404) if location_id is not recognized.
+    - Uses a thread-safe TTL cache with per-key single-flight deduplication for successful
+      responses only.
+    - Never caches errors and never substitutes demo values.
+    """
+    location = get_location_by_id(location_id)
+    if location is None:
+        raise InvalidLocationError(location_id)
+
+    settings = get_settings()
+    ttl = settings.open_meteo_cache_ttl_seconds
+
+    if not use_cache or ttl <= 0:
+        return _fetch_and_normalize_open_meteo(
+            location,
+            settings,
+            http_client=http_client,
         )
 
-    return normalized
+    # Fast-path read without contending on per-key I/O locks.
+    cached = _RESPONSE_CACHE.get(location.id)
+    if cached is not None:
+        return _mark_live_cache_hit(cached)
+
+    with _RESPONSE_CACHE.key_lock(location.id):
+        # Double-check after acquiring per-key lock to deduplicate concurrent cold misses.
+        cached = _RESPONSE_CACHE.get(location.id)
+        if cached is not None:
+            return _mark_live_cache_hit(cached)
+
+        normalized = _fetch_and_normalize_open_meteo(
+            location,
+            settings,
+            http_client=http_client,
+        )
+        _RESPONSE_CACHE.set(location.id, normalized, ttl)
+        return normalized
