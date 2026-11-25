@@ -2,13 +2,28 @@
 
 **Hack2Skill PromptWars Challenge 6: Urban Air Quality Assistant**
 
-AIRWISE AI is a local-first, full-stack environmental intelligence platform for urban air quality monitoring, regional mapping, historical trend analysis, and Gemini-powered contextual guidance across four African cities: **Lagos (Nigeria)**, **Abuja (Nigeria)**, **Nairobi (Kenya)**, and **Accra (Ghana)**.
-
-> **Local-Only Notice:** AIRWISE AI runs completely locally on Windows 11 (PowerShell) with zero cloud deployment, zero database server installations, and zero paid subscriptions required.
+> **Deployment Status Notice:** AIRWISE AI currently runs locally on Windows 11 (PowerShell) with zero paid subscriptions required. No public deployment URL is published yet; live URLs and screenshots will be added only after deployment is independently verified.
 
 ---
 
-## 1. Current System Architecture
+## 1. Problem Statement
+
+Families and urban residents in rapidly growing African cities—such as **Lagos**, **Abuja**, **Nairobi**, and **Accra**—often lack accessible, trustworthy, and actionable daily air-quality guidance. Raw pollutant numbers are difficult for households to translate into practical decisions about children's outdoor play, school commutes, outdoor exercise, elderly precautions, indoor ventilation timing, or low-emission daily habits. Conversely, generic AI chatbots frequently hallucinate unverified readings or blur regional model estimates with street-level sensor telemetry.
+
+---
+
+## 2. Solution Overview
+
+AIRWISE AI is a full-stack Urban Air Quality Assistant that combines transparent atmospheric model data with deterministic risk analytics and strictly grounded AI guidance across four African cities: **Lagos (Nigeria)**, **Abuja (Nigeria)**, **Nairobi (Kenya)**, and **Accra (Ghana)**.
+
+- **Live Model Monitoring & 4-City Map:** Displays US EPA AQI, five core pollutants (`PM2.5`, `PM10`, `NO2`, `O3`, `SO2`), future-only hourly forecasts, and a bidirectional Leaflet intelligence map.
+- **Historical Trends & Deterministic Predictive Intelligence:** Provides 7/14/30-day historical trends, 4-city comparisons, Peak Forecast Risk, elevated-risk windows, single-hour spikes, comparatively favorable windows, and independent activity planning.
+- **Family-Focused Grounded Gemini Assistant:** Translates verified Open-Meteo model data and future forecast windows into practical family routine guidance, low-emission household/commute habits, and indoor ventilation tips without fabricating numbers or giving medical advice.
+- **Strict Scientific Honesty:** Explicitly distinguishes live model data, forecasts, historical records, cached/persisted fallbacks, AI interpretation, and Demo Mode.
+
+---
+
+## 3. Architecture & Technology Stack
 
 ### Frontend (`C:\Projects\airwise-ai\frontend`)
 - **Stack:** Next.js 16.4.6 (App Router), React 18, TypeScript, Tailwind CSS (Enterprise Dark Charcoal / Forest Green / Teal & Mint theme), and Leaflet (`leaflet` + `@types/leaflet`).
@@ -36,7 +51,37 @@ AIRWISE AI is a local-first, full-stack environmental intelligence platform for 
 
 ---
 
-## 2. Supported Cities (Canonical Location Registry)
+## 4. AI Integration & Prompt Design
+
+AIRWISE AI integrates **Google Gemini (`gemini-2.5-flash`)** exclusively on the FastAPI backend via the official `google-genai` SDK (`app/services/gemini_assistant.py`), keeping `GEMINI_API_KEY` completely isolated from the browser.
+
+- **Strict Backend Data Grounding:** Every `POST /api/v1/assistant/ask` call fetches verified live and future-only forecast data via `fetch_open_meteo_air_quality()` (reusing the shared HTTP pool and single-flight cache) and injects that structured JSON snapshot into the prompt.
+- **Four Assistant Modes:** `ask`, `activity_planner` (family routine, children's play, school commute, household errands, exercise, elderly precautions, low-emission habits, and indoor ventilation timing), `pollutant_education`, and `city_comparison`.
+- **Enforced Five-Section JSON Response Contract:** Gemini is instructed to return strict JSON validated by Pydantic (`StructuredAssistantSections`):
+  1. `verified_data_summary` — Factual summary citing exact verified model values, units, and timestamps (or explicit unavailability).
+  2. `forecast_context` — Factual summary of strictly future forecast hours (`> observation_time`) or explicit disclosure when unavailable.
+  3. `ai_interpretation` — Grounded answer to the user's question.
+  4. `general_health_guidance` — General informational precautions (non-medical; no diagnosis, treatment, or medication advice).
+  5. `model_limitations_notice` — Concise disclosure of CAMS Global ~45 km grid / 3-hourly native resolution and non-sensor nature.
+- **Anti-Hallucination & Honesty Guardrails:**
+  - Never fabricates AQI values, pollutant readings, safe hours, or numerical emission-reduction percentages.
+  - Explicitly distinguishes location-specific, data-grounded guidance from general precautionary indoor/household tips.
+  - Never claims outdoor CAMS Global estimates measure indoor air quality.
+  - Returns a clean `HTTP 503 assistant_unavailable` state when `GEMINI_API_KEY` is unset.
+
+---
+
+## 5. Family-Focused Demonstration Workflow
+
+1. **Select a City:** Open AIRWISE AI and switch between Lagos, Abuja, Nairobi, and Accra via the header selector or interactive map.
+2. **Inspect Current Conditions & Pollutants:** Review the US EPA AQI banner, observation timestamp, and 5 pollutant cards (`PM2.5`, `PM10`, `NO2`, `O3`, `SO2`) with plain-language health context.
+3. **Explore Historical Trends & Predictive Intelligence:** Review 7/14/30-day trends, 4-city comparisons, Peak Forecast Risk, elevated-risk windows, and comparatively favorable outdoor windows.
+4. **Run Family Routine & Indoor Guidance Prompts:** In the **AIRWISE AI Assistant**, click **`Family routine & low-emission plan`** or **`Indoor air & ventilation tips`** to receive grounded guidance covering children's outdoor play, school commute timing, elderly precautions, avoiding generator exhaust/open burning/idling, and indoor ventilation timing.
+5. **Verify Provenance & Timestamps:** Confirm every section explicitly separates verified model data, forecast context, AI interpretation, non-medical guidance, and CAMS Global model limitations.
+
+---
+
+## 6. Supported Cities (Canonical Location Registry)
 
 | `location_id` | City & Country | Coordinates (`lat`, `lon`) | IANA Timezone |
 | :--- | :--- | :--- | :--- |
@@ -47,7 +92,7 @@ AIRWISE AI is a local-first, full-stack environmental intelligence platform for 
 
 ---
 
-## 3. Data Provenance, Integrity & Scientific Limitations
+## 7. Data Sources, Provenance & Attribution
 
 AIRWISE AI strictly separates every data category and never silently mixes live, historical, cached, persisted, or demo values:
 
@@ -71,7 +116,7 @@ AIRWISE AI strictly separates every data category and never silently mixes live,
 
 ---
 
-## 4. Backend API Endpoints (`/api/v1`)
+## 8. Backend API Endpoints (`/api/v1`)
 
 | Method & Endpoint | Query / Body | Description |
 | :--- | :--- | :--- |
@@ -136,7 +181,7 @@ AIRWISE AI strictly separates every data category and never silently mixes live,
 
 ---
 
-## 5. Environment Variables
+## 9. Environment Variables
 
 ### Backend (`backend/.env` — copy from `backend/.env.example`)
 | Variable | Default | Purpose |
@@ -161,7 +206,7 @@ AIRWISE AI strictly separates every data category and never silently mixes live,
 
 ---
 
-## 6. Local Installation & Startup (Windows 11 PowerShell)
+## 10. Local Installation & Startup (Windows 11 PowerShell)
 
 ### Prerequisites
 - **Windows 11** with **Windows PowerShell** (no WSL, Linux, or Docker required)
@@ -203,14 +248,14 @@ Open **`http://localhost:3000`** in your browser.
 
 ---
 
-## 7. Running Tests & Verification (Windows PowerShell)
+## 11. Running Tests & Verification (Windows PowerShell)
 
 ### Backend Automated Test Suite (`pytest`)
 ```powershell
 cd C:\Projects\airwise-ai\backend
 .\.venv\Scripts\python.exe -m pytest -v
 ```
-Runs all **124 offline mocked tests** across `tests/test_api.py`, `tests/test_assistant.py`, `tests/test_history.py`, `tests/test_intelligence.py`, `tests/test_observability.py`, `tests/test_lifecycle_http.py`, `tests/test_cache_concurrency.py`, and `tests/test_sqlite_reliability.py`.
+Runs all **125 offline mocked tests** across `tests/test_api.py`, `tests/test_assistant.py`, `tests/test_history.py`, `tests/test_intelligence.py`, `tests/test_observability.py`, `tests/test_lifecycle_http.py`, `tests/test_cache_concurrency.py`, and `tests/test_sqlite_reliability.py`.
 
 ### Frontend TypeScript Check & Production Build
 ```powershell
@@ -246,7 +291,41 @@ npm.cmd run test:e2e:a11y
 
 ---
 
-## 8. Troubleshooting (Windows 11)
+## 12. Deployment Architecture (Planned Free-Tier Topology)
+
+> **Not Yet Deployed:** No live public URL exists yet. The architecture below documents the verified zero-cost deployment plan for Attempt 1.
+
+- **Frontend (Vercel Hobby — Free):** Deploy `frontend/` directly as a Next.js 16 app with build-time environment variable `NEXT_PUBLIC_API_BASE_URL=https://<backend-origin>`.
+- **Backend (Render Free Web Service):** Deploy `backend/` as a single-worker ASGI process (`uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`), health check `/api/v1/health`, and server-only environment variables (`GEMINI_API_KEY`, `AIRWISE_ENVIRONMENT=production`, `AIRWISE_APP_VERSION=0.9.1`, `AIRWISE_LOG_LEVEL=INFO`, `AIRWISE_ALLOWED_ORIGINS=https://<frontend-origin>`).
+- **Cold-Start Handling:** The frontend API client (`frontend/src/lib/api.ts`) applies a 35s request timeout and at most one bounded retry on idempotent `GET` requests during non-JSON gateway wake-up / cold-start timeouts (never auto-retrying `POST /api/v1/assistant/ask`).
+
+---
+
+## 13. Screenshots & Demo Guide (Attempt 1 Placeholders)
+
+*Live URLs and screenshots will be added only after public deployment is verified:*
+
+- **Live Web App URL:** *(Pending verified public deployment)*
+- **Backend Health Endpoint:** *(Pending verified public deployment)*
+- **Screenshot 1 — Live Dashboard & 4-City Map:** *(To be captured post-deployment)*
+- **Screenshot 2 — Historical Trends & Predictive Intelligence:** *(To be captured post-deployment)*
+- **Screenshot 3 — Family Routine & Low-Emission Gemini Assistant:** *(To be captured post-deployment)*
+
+---
+
+## 14. Known Limitations
+
+- **Open-Meteo CAMS Global Resolution:** Atmospheric model outputs represent an ~0.4° (~45 km) regional grid cell with 3-hourly native resolution interpolated to 1-hourly timestamps—not physical street-level or roadside sensors.
+- **Outdoor vs. Indoor Measurement Distinction:** Outdoor CAMS Global estimates do **not** measure indoor air quality. All indoor ventilation and smoke-reduction tips are general precautionary household guidance.
+- **Non-Medical Scope:** Health and family guidance is informational only and never constitutes medical diagnosis, treatment, or medication advice.
+- **Provisional Predictive Heuristics:** Phase 7 risk-window thresholds, OLS trend signals, and activity ceilings are deterministic MVP heuristics rather than empirically calibrated forecast accuracy statistics.
+- **Free-Tier Cold Starts:** On free PaaS web services (e.g., Render Free), idle backend instances spin down after inactivity and may take 30–60 seconds to wake on the first request.
+- **Ephemeral SQLite Storage on Free Hosting:** On free containers without persistent disks, `backend/data/airwise_history.db` resets on container restart/redeploy. Historical queries automatically re-initialize SQLite and re-fetch from Open-Meteo, though cross-restart `persisted_database_fallback` is only available while the container remains warm.
+- **Gemini Free-Tier Quota:** High-frequency assistant queries may encounter upstream Google AI Studio rate limits (`HTTP 429 assistant_rate_limited`); all live AQI, map, historical, and deterministic intelligence features remain unaffected.
+
+---
+
+## 15. Troubleshooting (Windows 11)
 
 - **PowerShell script execution policy blocks `npm`:** Use `npm.cmd` (e.g., `npm.cmd run dev`, `npm.cmd run build`) instead of `npm` to bypass `npm.ps1` execution policy restrictions.
 - **Next.js Turbopack socket error on Windows:** `package.json` already configures `"build": "next build --webpack"` for reliable local Windows builds.

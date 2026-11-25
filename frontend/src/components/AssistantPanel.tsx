@@ -134,6 +134,16 @@ export default function AssistantPanel({
           prompt: `Create a general daily activity plan for outdoor exercise, walking, cycling, outdoor events, and sensitive-group precautions in ${city} using available future forecast hours.`,
         },
         {
+          label: "Family routine & low-emission plan",
+          mode: "activity_planner",
+          prompt: `Build a family daily routine plan for ${city} covering children's outdoor play, school commute timing, household errands, elderly precautions, and practical low-emission habits using only available future forecast hours.`,
+        },
+        {
+          label: "Indoor air & ventilation tips",
+          mode: "activity_planner",
+          prompt: `Based on current and upcoming outdoor model conditions in ${city}, share practical indoor air-quality and ventilation timing tips (clearly distinguishing general household guidance from outdoor model data).`,
+        },
+        {
           label: `Explain ${selectedPollutant}`,
           mode: "pollutant_education",
           prompt: `Explain what ${selectedPollutant} is in accessible language and what the current model reading in ${city} indicates.`,

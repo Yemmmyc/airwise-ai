@@ -259,7 +259,12 @@ def _build_system_instruction() -> str:
         "appropriate that a ~45 km regional grid cannot establish an individual's exact street-level or indoor exposure.\n"
         "5. MEDICAL SAFETY: Provide only general informational environmental health guidance. NEVER provide "
         "medical diagnosis, clinical treatment instructions, or medication/dosage advice.\n"
-        "6. OUTPUT FORMAT: Respond ONLY with a valid JSON object matching this exact schema (no markdown fences):\n"
+        "6. HOUSEHOLD, LOW-EMISSION & INDOOR GUIDANCE HONESTY: When giving practical exposure-reduction, "
+        "low-emission, or indoor air-quality suggestions (such as ventilation timing, avoiding generator exhaust, "
+        "open burning, vehicle idling, or cooking-smoke buildup), explicitly distinguish general precautionary "
+        "guidance from location-specific, data-grounded recommendations. NEVER promise numerical emission "
+        "reductions or impact percentages, and NEVER present general indoor guidance as measured indoor AQI.\n"
+        "7. OUTPUT FORMAT: Respond ONLY with a valid JSON object matching this exact schema (no markdown fences):\n"
         "{\n"
         '  "verified_data_summary": "Factual summary citing exact verified model values, units, and timestamps (or unavailability).",\n'
         '  "forecast_context": "Factual summary of future forecast hours (> observation_time) or explicit statement if no forecast hours are available.",\n'
@@ -307,10 +312,22 @@ def _build_user_prompt(
             "Task: Answer the user's urban air-quality question directly using the verified data context."
         ),
         "activity_planner": (
-            "Task: Provide general daily activity planning guidance covering: "
-            "(1) Outdoor exercise, (2) Walking, (3) Cycling, (4) Outdoor events, and "
-            "(5) Sensitive-group precautions. Cite ONLY the actual future forecast timestamps and AQI values "
-            "provided in `future_hourly_forecast_points`. Do NOT invent a safe hour if the forecast does not support it."
+            "Task: Provide a practical, family-focused daily routine and activity plan covering: "
+            "(1) Children's outdoor play and school commute timing, (2) Household errands and daily routine timing, "
+            "(3) Outdoor exercise, walking, cycling, and outdoor events, "
+            "(4) Precautions for elderly or other potentially vulnerable household members, "
+            "(5) Realistic low-emission household and commute habits (such as avoiding unnecessary generator use "
+            "and reducing generator exhaust exposure, avoiding open burning of refuse, avoiding unnecessary vehicle "
+            "idling, and considering cleaner transport or shared journeys where practical), and "
+            "(6) Practical indoor air-quality steps (such as reducing indoor smoke and cooking-fume accumulation, "
+            "ventilating when outdoor conditions are comparatively favorable, and temporarily closing windows during "
+            "elevated outdoor pollution without causing unsafe loss of ventilation). "
+            "Cite ONLY the actual future forecast timestamps and AQI values in `future_hourly_forecast_points`, "
+            "explain why a suggested window is preferable when verified data supports it, and clearly state when forecast "
+            "data is unavailable. Do NOT invent a safe hour if the forecast does not support it, and never invent "
+            "pollutant values or numerical emission-reduction percentages. "
+            "Clearly distinguish location-specific data-grounded guidance from general precautionary indoor/household tips, "
+            "and never claim outdoor CAMS model estimates measure indoor air quality."
         ),
         "pollutant_education": (
             f"Task: Explain the requested pollutant(s) (focus: {request.pollutant_code or 'PM2.5, PM10, NO2, O3, SO2'}) "

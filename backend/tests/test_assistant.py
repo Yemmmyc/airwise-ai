@@ -388,3 +388,49 @@ def test_assistant_city_comparison_fetches_all_four_cities(
     city_ids = [snap["location"]["id"] for snap in data["city_comparisons"]]
     assert city_ids == ["lagos-ng", "abuja-ng", "nairobi-ke", "accra-gh"]
     assert all(snap["observation_time"] is not None for snap in data["city_comparisons"])
+
+
+def test_assistant_activity_planner_includes_family_low_emission_and_indoor_guardrails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify activity_planner passes family-routine, low-emission, indoor IAQ, and grounding directives."""
+    _configure_backend_settings(monkeypatch)
+    _mock_httpx_client_get(
+        monkeypatch,
+        status_code=200,
+        json_payload=_build_mock_open_meteo_payload(),
+    )
+    mock_generate = _mock_gemini_client(monkeypatch)
+
+    response = client.post(
+        "/api/v1/assistant/ask",
+        json={
+            "location_id": "lagos-ng",
+            "mode": "activity_planner",
+            "question": "Build a family daily routine and low-emission plan for Lagos.",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data["sections"].keys()) == {
+        "verified_data_summary",
+        "forecast_context",
+        "ai_interpretation",
+        "general_health_guidance",
+        "model_limitations_notice",
+    }
+
+    sent_prompt = mock_generate.call_args.kwargs["contents"].lower()
+    sent_config = mock_generate.call_args.kwargs["config"]
+    system_instruction = str(sent_config.system_instruction).lower()
+
+    assert "school commute" in sent_prompt
+    assert "children" in sent_prompt
+    assert "elderly" in sent_prompt
+    assert "generator" in sent_prompt
+    assert "open burning" in sent_prompt
+    assert "indoor air-quality" in sent_prompt
+    assert "ventilat" in sent_prompt
+    assert "never claim outdoor cams model estimates measure indoor air quality" in sent_prompt
+    assert "numerical emission" in system_instruction
+    assert "measured indoor aqi" in system_instruction

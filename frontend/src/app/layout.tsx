@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "AIRWISE AI | Urban Air Quality Intelligence Assistant",
   description:
-    "Environmental intelligence dashboard for urban air quality monitoring, pollutant insights, health advisories, and daily planning recommendations (Day 1 Demo Foundation).",
+    "Urban Air Quality Assistant providing model-based AQI monitoring, pollutant explanations, historical trends, deterministic risk windows, and grounded Gemini guidance for daily family planning.",
 };
 
 export default function RootLayout({

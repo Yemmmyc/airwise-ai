@@ -19,7 +19,11 @@ import {
 } from "@/types/dashboard";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
-const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 35000;
+const ASSISTANT_POST_TIMEOUT_MS = 35000;
+const COLD_START_RETRY_DELAY_MS = 1500;
+const COLD_START_MAX_GET_RETRIES = 1;
+const COLD_START_GATEWAY_STATUSES = new Set([502, 503, 504]);
 
 export function getApiBaseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
@@ -55,7 +59,42 @@ export function isRequestCanceledError(err: unknown): boolean {
   );
 }
 
-async function fetchWithTimeout(
+function waitWithAbort(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Request aborted by caller", "AbortError"));
+      return;
+    }
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Request aborted by caller", "AbortError"));
+    };
+
+    const timer = setTimeout(() => {
+      if (signal) {
+        signal.removeEventListener("abort", onAbort);
+      }
+      resolve();
+    }, delayMs);
+
+    if (signal) {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  });
+}
+
+function isNonJsonGatewayWakeupResponse(response: Response): boolean {
+  if (!COLD_START_GATEWAY_STATUSES.has(response.status)) {
+    return false;
+  }
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  // FastAPI structured error payloads return application/json; Render/proxy cold-start
+  // 502/503/504 responses are typically text/html or text/plain before Uvicorn binds.
+  return !contentType.includes("application/json");
+}
+
+async function fetchSingleAttemptWithTimeout(
   url: string,
   options: RequestInit & { timeoutMs?: number } = {}
 ): Promise<Response> {
@@ -89,7 +128,7 @@ async function fetchWithTimeout(
   } catch (err) {
     if (timedOut) {
       throw new ApiClientError(
-        `Request timed out after ${(timeoutMs / 1000).toFixed(0)}s waiting for FastAPI backend.`,
+        `Request timed out after ${(timeoutMs / 1000).toFixed(0)}s waiting for FastAPI backend (the server may be waking up from idle—please retry).`,
         504,
         "client_timeout",
         true
@@ -111,6 +150,63 @@ async function fetchWithTimeout(
       callerSignal.removeEventListener("abort", onCallerAbort);
     }
   }
+}
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit & { timeoutMs?: number; retryOnColdStart?: boolean } = {}
+): Promise<Response> {
+  const {
+    retryOnColdStart,
+    method = "GET",
+    signal: callerSignal,
+    ...attemptOptions
+  } = options;
+
+  // Allow at most one bounded retry for idempotent GET requests during free-tier cold starts.
+  // Non-idempotent requests (e.g., POST /assistant/ask) are never auto-retried.
+  const canRetry =
+    (retryOnColdStart ?? method.toUpperCase() === "GET") &&
+    method.toUpperCase() === "GET";
+  const maxAttempts = canRetry ? COLD_START_MAX_GET_RETRIES + 1 : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchSingleAttemptWithTimeout(url, {
+        ...attemptOptions,
+        method,
+        signal: callerSignal,
+      });
+
+      if (attempt < maxAttempts && isNonJsonGatewayWakeupResponse(response)) {
+        await waitWithAbort(COLD_START_RETRY_DELAY_MS, callerSignal ?? undefined);
+        continue;
+      }
+
+      return response;
+    } catch (err) {
+      if (isRequestCanceledError(err)) {
+        throw err;
+      }
+
+      const isColdStartRetryable =
+        err instanceof ApiClientError &&
+        (err.errorCode === "client_timeout" || err.errorCode === "network_error");
+
+      if (attempt < maxAttempts && isColdStartRetryable) {
+        await waitWithAbort(COLD_START_RETRY_DELAY_MS, callerSignal ?? undefined);
+        continue;
+      }
+
+      throw err;
+    }
+  }
+
+  throw new ApiClientError(
+    "Unable to reach FastAPI backend after cold-start retry.",
+    undefined,
+    "network_error"
+  );
 }
 
 export async function fetchBackendHealth(signal?: AbortSignal): Promise<HealthResponse> {
@@ -234,7 +330,8 @@ export async function askAirwiseAssistant(
     body: JSON.stringify(payload),
     signal,
     cache: "no-store",
-    timeoutMs: 20000,
+    timeoutMs: ASSISTANT_POST_TIMEOUT_MS,
+    retryOnColdStart: false,
   });
 
   if (!response.ok) {
@@ -285,7 +382,7 @@ export async function fetchHistoricalAirQuality(
     headers: { Accept: "application/json" },
     signal: options?.signal,
     cache: "no-store",
-    timeoutMs: 15000,
+    timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
   });
 
   if (!response.ok) {
@@ -332,7 +429,7 @@ export async function fetchHistoricalCityComparison(
     headers: { Accept: "application/json" },
     signal: options?.signal,
     cache: "no-store",
-    timeoutMs: 20000,
+    timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
   });
 
   if (!response.ok) {
@@ -376,7 +473,7 @@ export async function fetchPredictiveIntelligence(
     headers: { Accept: "application/json" },
     signal,
     cache: "no-store",
-    timeoutMs: 12000,
+    timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
   });
 
   if (!response.ok) {
