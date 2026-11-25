@@ -30,6 +30,12 @@ _HTTP_POOL_LIMITS = httpx.Limits(
     keepalive_expiry=30.0,
 )
 
+_SECURITY_RESPONSE_HEADERS: dict[str, str] = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+}
+
 
 @asynccontextmanager
 async def _app_lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -102,11 +108,13 @@ def create_app() -> FastAPI:
                 return JSONResponse(
                     status_code=500,
                     content={"detail": "Internal Server Error"},
-                    headers={REQUEST_ID_HEADER: req_id},
+                    headers={**_SECURITY_RESPONSE_HEADERS, REQUEST_ID_HEADER: req_id},
                 )
 
             duration_ms = round((time.monotonic() - started) * 1000.0, 2)
             response.headers[REQUEST_ID_HEADER] = req_id
+            for header_name, header_value in _SECURITY_RESPONSE_HEADERS.items():
+                response.headers[header_name] = header_value
 
             if response.status_code >= 500:
                 logger.error(

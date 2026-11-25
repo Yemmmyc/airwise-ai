@@ -16,6 +16,7 @@ Data Integrity Safeguards:
 
 from __future__ import annotations
 
+import contextvars
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -869,9 +870,14 @@ def fetch_historical_city_comparison(
                 error_message=exc.message,
             )
 
-    # Bounded concurrency (max 4 workers for 4 configured cities)
+    # Bounded concurrency (max 4 workers for 4 configured cities).
+    # Copy contextvars per task so request correlation IDs propagate into worker logs.
     with ThreadPoolExecutor(max_workers=len(AVAILABLE_LOCATIONS)) as executor:
-        items = list(executor.map(_load_one, AVAILABLE_LOCATIONS))
+        futures = [
+            executor.submit(contextvars.copy_context().run, _load_one, loc)
+            for loc in AVAILABLE_LOCATIONS
+        ]
+        items = [future.result() for future in futures]
 
     available_count = sum(1 for item in items if item.status == "available")
     unavailable_count = len(items) - available_count

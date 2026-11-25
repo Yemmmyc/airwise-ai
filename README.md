@@ -22,10 +22,14 @@ AIRWISE AI is a local-first, full-stack environmental intelligence platform for 
 
 ### Backend (`C:\Projects\airwise-ai\backend`)
 - **Stack:** Python 3.12, FastAPI, Pydantic v2, `pydantic-settings`, `httpx`, `google-genai` (official Google Gen AI SDK), Python standard-library `sqlite3`, and `pytest`.
+- **Phase 9.1 Reliability & Observability Architecture (`docs/ARCHITECTURE.md`):**
+  - `app/main.py`: FastAPI lifespan owning one shared synchronous `httpx.Client` pool (`max_connections=20`, `max_keepalive_connections=10`, `keepalive_expiry=30.0s`) with deterministic shutdown, `X-Request-ID` correlation middleware, and baseline security response headers (`X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`).
+  - `app/core/logging_config.py`: Structured stdlib logging (`AIRWISE_LOG_LEVEL`, default `INFO`), `contextvars`-backed `X-Request-ID` propagation (including `ThreadPoolExecutor` comparison workers), and defense-in-depth secret redaction across log messages and tracebacks.
+  - `app/core/ttl_cache.py`: Thread-safe `SingleFlightTTLCache` with bounded per-key locks, double-checked reads, monotonic TTL expiration, and deep-copy isolation preventing thundering-herd upstream bursts.
 - **Key Services:**
-  - `app/services/open_meteo.py`: Live Open-Meteo CAMS Global model retrieval, timezone-aware temporal classification (`historical_model`, `current_model`, `hourly_forecast`), unit normalization, and 300-second in-memory live TTL cache.
-  - `app/services/open_meteo_history.py`: Historical Open-Meteo retrieval (`past_days=7|14|30`, `forecast_days=0`), local-timezone daily aggregations, period summaries, dedicated 20-minute historical in-memory TTL cache, and fault-isolated 4-city comparison.
-  - `app/services/history_store.py`: Modular Python stdlib `sqlite3` persistence (`backend/data/airwise_history.db`, excluded from Git) keyed by `(location_id, timestamp_utc, model_domain)` with idempotent upserts and upstream-outage fallback.
+  - `app/services/open_meteo.py`: Live Open-Meteo CAMS Global model retrieval, timezone-aware temporal classification (`historical_model`, `current_model`, `hourly_forecast`), unit normalization, and 300-second single-flight live TTL cache.
+  - `app/services/open_meteo_history.py`: Historical Open-Meteo retrieval (`past_days=7|14|30`, `forecast_days=0`), local-timezone daily aggregations, period summaries, dedicated 20-minute single-flight historical TTL cache, and fault-isolated 4-city comparison.
+  - `app/services/history_store.py`: Modular Python stdlib `sqlite3` persistence (`backend/data/airwise_history.db`, excluded from Git) with deterministic connection cleanup, explicit transaction boundaries, `PRAGMA journal_mode=WAL` (with fallback), `PRAGMA busy_timeout=5000`, idempotent upserts, and upstream-outage fallback.
   - `app/services/predictive_intelligence.py`: Phase 7 deterministic, rule-based analytical engine transforming authoritative Open-Meteo CAMS Global 24-hour forecasts into Peak Forecast Risk, elevated-risk windows, single-hour spikes, comparatively favorable windows, independent activity guidance, provisional OLS trend signals, and qualitative data-quality evidence (zero AI generation, zero ML training).
   - `app/services/gemini_assistant.py`: Backend-only Gemini integration (`gemini-2.5-flash` via `google-genai`) grounded strictly in verified Open-Meteo data, returning a clean `HTTP 503 assistant_unavailable` state whenever `GEMINI_API_KEY` is unset.
   - `app/services/demo_data.py`: Canonical 4-city location registry and deterministic Day 1 demo scenarios (used only when the user explicitly selects Demo Mode).
@@ -71,7 +75,7 @@ AIRWISE AI strictly separates every data category and never silently mixes live,
 
 | Method & Endpoint | Query / Body | Description |
 | :--- | :--- | :--- |
-| `GET /api/v1/health` | — | Service health check and API version metadata. |
+| `GET /api/v1/health` | — | Lightweight, zero-network runtime health check reporting `status` (`ok`/`degraded`), `provider_configured`, `live_provider_connected` (`false`), `history_store_status`, `assistant_configured` (boolean only), and `supported_locations_count`. |
 | `GET /api/v1/dashboard` | `location=lagos-ng` | Explicit Day 1 deterministic demo dataset (`is_demo_data: true`). |
 | `GET /api/v1/air-quality` | `location_id=lagos-ng` | Current CAMS Global model estimate (`us_aqi`, `pm2_5`, `pm10`, `no2`, `o3`, `so2`) + strictly future hourly forecast (`> observation_time`) + 300s in-memory cache. |
 | `GET /api/v1/air-quality/history` | `location_id=lagos-ng&days=7\|14\|30&force_refresh=false` | Genuine historical hourly records (`historical_model`), local-timezone daily summaries, period summary, completeness %, SQLite persistence, and 20-minute historical cache. |
@@ -138,6 +142,7 @@ AIRWISE AI strictly separates every data category and never silently mixes live,
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
 | `AIRWISE_ALLOWED_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | Allowed CORS origins for the local Next.js frontend. |
+| `AIRWISE_LOG_LEVEL` | `INFO` | Backend structured logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
 | `AIRWISE_OPEN_METEO_DOMAINS` | `cams_global` | Open-Meteo atmospheric model domain. |
 | `AIRWISE_OPEN_METEO_TIMEOUT_SECONDS` | `8.0` | Timeout for live Open-Meteo requests. |
 | `AIRWISE_OPEN_METEO_CACHE_TTL_SECONDS` | `300` | In-memory TTL (seconds) for live `/air-quality` responses. |
@@ -205,7 +210,7 @@ Open **`http://localhost:3000`** in your browser.
 cd C:\Projects\airwise-ai\backend
 .\.venv\Scripts\python.exe -m pytest -v
 ```
-Runs all **71 offline mocked tests** across `tests/test_api.py` (24), `tests/test_assistant.py` (9), `tests/test_history.py` (11), and `tests/test_intelligence.py` (27).
+Runs all **124 offline mocked tests** across `tests/test_api.py`, `tests/test_assistant.py`, `tests/test_history.py`, `tests/test_intelligence.py`, `tests/test_observability.py`, `tests/test_lifecycle_http.py`, `tests/test_cache_concurrency.py`, and `tests/test_sqlite_reliability.py`.
 
 ### Frontend TypeScript Check & Production Build
 ```powershell

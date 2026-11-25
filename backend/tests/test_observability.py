@@ -11,6 +11,7 @@ Covers:
 from __future__ import annotations
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -396,3 +397,216 @@ def test_history_sqlite_read_failure_logs_warning(
     assert "history_sqlite_read_failed" in messages
     assert "history_upstream_timeout" in messages
     clear_history_cache()
+
+
+# ============================================================================
+# 4. Phase 9.1D — Baseline Security Headers & Worker Correlation Propagation
+# ============================================================================
+
+_EXPECTED_SECURITY_HEADERS = {
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    "x-frame-options": "DENY",
+}
+
+
+def _assert_baseline_security_headers(response: httpx.Response) -> None:
+    for header_name, expected_value in _EXPECTED_SECURITY_HEADERS.items():
+        assert response.headers.get(header_name) == expected_value
+    assert "content-security-policy" not in response.headers
+    assert "strict-transport-security" not in response.headers
+
+
+def test_security_headers_present_on_success_4xx_docs_and_unhandled_500() -> None:
+    # 1. Successful JSON API response (200)
+    ok_resp = client.get("/api/v1/health", headers={REQUEST_ID_HEADER: "sec-ok-0001"})
+    assert ok_resp.status_code == 200
+    assert ok_resp.headers.get(REQUEST_ID_HEADER) == "sec-ok-0001"
+    _assert_baseline_security_headers(ok_resp)
+
+    # 2. Swagger docs remain accessible without CSP conflict
+    docs_resp = client.get("/docs")
+    assert docs_resp.status_code == 200
+    _assert_baseline_security_headers(docs_resp)
+
+    # 3. Client error response (4xx)
+    bad_resp = client.get(
+        "/api/v1/air-quality?location_id=unknown-city",
+        headers={REQUEST_ID_HEADER: "sec-4xx-0002"},
+    )
+    assert bad_resp.status_code == 404
+    assert bad_resp.headers.get(REQUEST_ID_HEADER) == "sec-4xx-0002"
+    _assert_baseline_security_headers(bad_resp)
+
+    # 4. Unhandled server error response (500)
+    test_app = create_app()
+
+    @test_app.get("/_test_sec_boom")
+    def _sec_boom() -> None:
+        raise RuntimeError("simulated unhandled error")
+
+    local_client = TestClient(test_app, raise_server_exceptions=False)
+    err_resp = local_client.get(
+        "/_test_sec_boom",
+        headers={REQUEST_ID_HEADER: "sec-500-0003"},
+    )
+    assert err_resp.status_code == 500
+    assert err_resp.headers.get(REQUEST_ID_HEADER) == "sec-500-0003"
+    assert err_resp.json() == {"detail": "Internal Server Error"}
+    _assert_baseline_security_headers(err_resp)
+    assert get_request_id() == "-"
+
+
+def test_history_compare_propagates_request_id_to_worker_thread_logs(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.schemas.air_quality import DataProvenance
+    from app.schemas.history import (
+        HistoricalAirQualityResponse,
+        HistoricalDataOriginMetadata,
+        HistoricalPeriodSummary,
+    )
+    from app.services.demo_data import AVAILABLE_LOCATIONS, get_location_by_id
+    from app.services.open_meteo import OpenMeteoProviderError
+
+    worker_logger = get_logger("services.open_meteo_history")
+    seen_worker_ids: dict[str, str] = {}
+    lock = threading.Lock()
+
+    def _fake_fetch_history(*, location_id: str, days: int, **kwargs):
+        active_id = get_request_id()
+        with lock:
+            seen_worker_ids[location_id] = active_id
+        worker_logger.warning("compare_worker_event city=%s", location_id)
+
+        if location_id == "accra-gh":
+            raise OpenMeteoProviderError(
+                "Simulated single-city failure",
+                error_code="open_meteo_timeout",
+                status_code=504,
+            )
+
+        loc = get_location_by_id(location_id)
+        return HistoricalAirQualityResponse(
+            location=loc,
+            range_days=days,  # type: ignore[arg-type]
+            start_date="2026-11-18",
+            end_date="2026-11-24",
+            timezone=loc.timezone,
+            retrieval_time="2026-11-25T10:00:00Z",
+            origin=HistoricalDataOriginMetadata(
+                storage_origin="fresh_provider_retrieval",
+                cache_hit=False,
+                served_from_persistence=False,
+                persisted_to_database=True,
+                fallback_reason=None,
+            ),
+            period_summary=HistoricalPeriodSummary(
+                days_requested=days,  # type: ignore[arg-type]
+                days_with_data=0,
+                total_valid_hours=0,
+                total_expected_hours=0,
+                total_missing_hours=0,
+                completeness_percent=0.0,
+            ),
+            data_completeness_percent=0.0,
+            provenance=DataProvenance(
+                provider_name="Open-Meteo Air Quality API",
+                model_domain="cams_global",
+                spatial_resolution="~0.4° (~45 km) global grid",
+                temporal_resolution="3-hourly native CAMS Global interpolated to 1-hourly",
+                requested_latitude=loc.latitude,
+                requested_longitude=loc.longitude,
+                returned_latitude=loc.latitude,
+                returned_longitude=loc.longitude,
+                timezone=loc.timezone,
+                retrieval_time="2026-11-25T10:00:00Z",
+            ),
+            daily_summaries=[],
+            hourly_records=[],
+        )
+
+    monkeypatch.setattr(
+        "app.services.open_meteo_history.fetch_historical_air_quality",
+        _fake_fetch_history,
+    )
+
+    req_id = "compare-worker-trace-01"
+    with caplog.at_level(logging.WARNING, logger="airwise"):
+        resp = client.get(
+            "/api/v1/air-quality/history/compare?days=7",
+            headers={REQUEST_ID_HEADER: req_id},
+        )
+
+    assert resp.status_code == 200
+    assert resp.headers.get(REQUEST_ID_HEADER) == req_id
+    _assert_baseline_security_headers(resp)
+
+    payload = resp.json()
+    assert payload["cities_available"] == 3
+    assert payload["cities_unavailable"] == 1
+    assert [c["location"]["id"] for c in payload["cities"]] == [
+        loc.id for loc in AVAILABLE_LOCATIONS
+    ]
+    assert seen_worker_ids == {loc.id: req_id for loc in AVAILABLE_LOCATIONS}
+
+    worker_records = [
+        r for r in caplog.records if "compare_worker_event" in r.getMessage()
+    ]
+    assert len(worker_records) == len(AVAILABLE_LOCATIONS)
+    assert all(getattr(r, "request_id", None) == req_id for r in worker_records)
+    assert get_request_id() == "-"
+
+
+def test_concurrent_history_compare_requests_isolate_worker_request_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.demo_data import AVAILABLE_LOCATIONS
+    from app.services.open_meteo import OpenMeteoProviderError
+
+    # Synchronize all 8 worker threads (2 concurrent requests x 4 cities) so they
+    # execute simultaneously and deterministically verify zero context cross-talk.
+    barrier = threading.Barrier(len(AVAILABLE_LOCATIONS) * 2, timeout=5.0)
+    captured_by_req: dict[str, list[str]] = {}
+    lock = threading.Lock()
+
+    def _fake_fetch_history(*, location_id: str, days: int, **kwargs):
+        active_id = get_request_id()
+        barrier.wait()
+        active_id_after = get_request_id()
+        assert active_id_after == active_id
+        with lock:
+            captured_by_req.setdefault(active_id, []).append(location_id)
+        raise OpenMeteoProviderError(
+            "Deterministic fault-isolated failure",
+            error_code="open_meteo_timeout",
+            status_code=504,
+        )
+
+    monkeypatch.setattr(
+        "app.services.open_meteo_history.fetch_historical_air_quality",
+        _fake_fetch_history,
+    )
+
+    req_ids = ["compare-iso-alpha", "compare-iso-bravo"]
+
+    def _call_compare(rid: str) -> tuple[str, int, str | None]:
+        resp = client.get(
+            "/api/v1/air-quality/history/compare?days=7",
+            headers={REQUEST_ID_HEADER: rid},
+        )
+        return rid, resp.status_code, resp.headers.get(REQUEST_ID_HEADER)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(_call_compare, req_ids))
+
+    for expected_rid, status_code, returned_rid in results:
+        assert status_code == 200
+        assert returned_rid == expected_rid
+        assert sorted(captured_by_req.get(expected_rid, [])) == sorted(
+            loc.id for loc in AVAILABLE_LOCATIONS
+        )
+
+    assert set(captured_by_req.keys()) == set(req_ids)
+    assert get_request_id() == "-"
