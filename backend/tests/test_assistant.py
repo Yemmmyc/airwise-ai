@@ -32,7 +32,7 @@ def _configure_backend_settings(
     monkeypatch: pytest.MonkeyPatch,
     *,
     gemini_api_key: str | None = "test-fake-key-never-logged",
-    gemini_model: str = "gemini-2.5-flash",
+    gemini_model: str = "gemini-3.5-flash-lite",
 ) -> Settings:
     """Return a controlled Settings instance and patch get_settings in assistant service."""
     test_settings = Settings(
@@ -161,7 +161,7 @@ def test_assistant_successful_gemini_response_with_verified_context(
     data = response.json()
     assert data["status"] == "ok"
     assert data["is_ai_generated"] is True
-    assert data["model"] == "gemini-2.5-flash"
+    assert data["model"] == "gemini-3.5-flash-lite"
     assert data["location"]["id"] == "lagos-ng"
     assert data["verified_context"]["data_status"] == "available"
     assert data["verified_context"]["us_aqi"] == 93
@@ -434,3 +434,71 @@ def test_assistant_activity_planner_includes_family_low_emission_and_indoor_guar
     assert "never claim outdoor cams model estimates measure indoor air quality" in sent_prompt
     assert "numerical emission" in system_instruction
     assert "measured indoor aqi" in system_instruction
+
+
+def test_assistant_default_model_and_env_override_passed_to_generate_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify default model is gemini-3.5-flash-lite and AIRWISE_GEMINI_MODEL override works."""
+    monkeypatch.delenv("AIRWISE_GEMINI_MODEL", raising=False)
+    default_settings = Settings(_env_file=None, gemini_api_key="test-fake-key-never-logged")
+    assert default_settings.gemini_model == "gemini-3.5-flash-lite"
+
+    monkeypatch.setattr(
+        "app.services.gemini_assistant.get_settings",
+        lambda: default_settings,
+    )
+    _mock_httpx_client_get(
+        monkeypatch,
+        status_code=200,
+        json_payload=_build_mock_open_meteo_payload(),
+    )
+    mock_generate = _mock_gemini_client(monkeypatch)
+
+    default_resp = client.post(
+        "/api/v1/assistant/ask",
+        json={
+            "location_id": "lagos-ng",
+            "mode": "ask",
+            "question": "How is air quality in Lagos right now?",
+        },
+    )
+    assert default_resp.status_code == 200
+    assert default_resp.json()["model"] == "gemini-3.5-flash-lite"
+    assert mock_generate.call_args.kwargs["model"] == "gemini-3.5-flash-lite"
+    assert set(default_resp.json()["sections"].keys()) == {
+        "verified_data_summary",
+        "forecast_context",
+        "ai_interpretation",
+        "general_health_guidance",
+        "model_limitations_notice",
+    }
+
+    # Verify explicit AIRWISE_GEMINI_MODEL environment variable override
+    monkeypatch.setenv("AIRWISE_GEMINI_MODEL", "gemini-3.8-flash")
+    override_settings = Settings(_env_file=None, gemini_api_key="test-fake-key-never-logged")
+    assert override_settings.gemini_model == "gemini-3.8-flash"
+    monkeypatch.setattr(
+        "app.services.gemini_assistant.get_settings",
+        lambda: override_settings,
+    )
+    mock_generate_override = _mock_gemini_client(monkeypatch)
+
+    override_resp = client.post(
+        "/api/v1/assistant/ask",
+        json={
+            "location_id": "lagos-ng",
+            "mode": "ask",
+            "question": "What does PM2.5 look like in Lagos?",
+        },
+    )
+    assert override_resp.status_code == 200
+    assert override_resp.json()["model"] == "gemini-3.8-flash"
+    assert mock_generate_override.call_args.kwargs["model"] == "gemini-3.8-flash"
+    assert set(override_resp.json()["sections"].keys()) == {
+        "verified_data_summary",
+        "forecast_context",
+        "ai_interpretation",
+        "general_health_guidance",
+        "model_limitations_notice",
+    }

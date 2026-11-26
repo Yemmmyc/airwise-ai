@@ -36,9 +36,9 @@ AIRWISE AI enforces a strict separation between the browser UI and the backend i
 - Produces Peak Forecast Risk, elevated-risk windows (`>= 2` contiguous hours at US AQI `>= 101`), isolated single-hour spikes, comparatively favorable windows, independent activity guidance (`outdoor_exercise`, `outdoor_errands`, `general_outdoor`), per-metric provisional OLS trend signals, and qualitative data-quality tiers.
 
 ### D. Grounded Gemini Assistant (`app/services/gemini_assistant.py`)
-- Backend-only integration using the official `google-genai` SDK (`gemini-2.5-flash`, 15.0s timeout).
+- Backend-only Gemini Developer API integration using the official `google-genai` SDK (`gemini-3.5-flash-lite` default, configurable via `AIRWISE_GEMINI_MODEL`, 15.0s timeout), keeping `GEMINI_API_KEY` strictly on the server.
 - Grounds every answer in verified Open-Meteo payloads retrieved through `fetch_open_meteo_air_quality()` (reusing the shared HTTP client and live single-flight cache).
-- Enforces strict separation of verified data, forecast context, AI interpretation, non-medical general health guidance, and model limitations. Returns `HTTP 503 assistant_unavailable` whenever `GEMINI_API_KEY` is unset.
+- Enforces the five-section structured JSON contract (`verified_data_summary`, `forecast_context`, `ai_interpretation`, `general_health_guidance`, `model_limitations_notice`) separating verified data, forecast context, AI interpretation, non-medical general health guidance, and model limitations. Returns `HTTP 503 assistant_unavailable` whenever `GEMINI_API_KEY` is unset.
 
 ---
 

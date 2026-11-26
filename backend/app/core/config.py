@@ -34,7 +34,7 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("AIRWISE_GEMINI_API_KEY", "GEMINI_API_KEY"),
     )
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash-lite"
     gemini_timeout_seconds: float = 15.0
 
     model_config = SettingsConfigDict(

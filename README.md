@@ -46,14 +46,14 @@ AIRWISE AI is a full-stack Urban Air Quality Assistant that combines transparent
   - `app/services/open_meteo_history.py`: Historical Open-Meteo retrieval (`past_days=7|14|30`, `forecast_days=0`), local-timezone daily aggregations, period summaries, dedicated 20-minute single-flight historical TTL cache, and fault-isolated 4-city comparison.
   - `app/services/history_store.py`: Modular Python stdlib `sqlite3` persistence (`backend/data/airwise_history.db`, excluded from Git) with deterministic connection cleanup, explicit transaction boundaries, `PRAGMA journal_mode=WAL` (with fallback), `PRAGMA busy_timeout=5000`, idempotent upserts, and upstream-outage fallback.
   - `app/services/predictive_intelligence.py`: Phase 7 deterministic, rule-based analytical engine transforming authoritative Open-Meteo CAMS Global 24-hour forecasts into Peak Forecast Risk, elevated-risk windows, single-hour spikes, comparatively favorable windows, independent activity guidance, provisional OLS trend signals, and qualitative data-quality evidence (zero AI generation, zero ML training).
-  - `app/services/gemini_assistant.py`: Backend-only Gemini integration (`gemini-2.5-flash` via `google-genai`) grounded strictly in verified Open-Meteo data, returning a clean `HTTP 503 assistant_unavailable` state whenever `GEMINI_API_KEY` is unset.
+  - `app/services/gemini_assistant.py`: Backend-only Gemini Developer API integration (`gemini-3.5-flash-lite` default, configurable via `AIRWISE_GEMINI_MODEL`, via `google-genai`) grounded strictly in verified Open-Meteo data, returning a clean `HTTP 503 assistant_unavailable` state whenever `GEMINI_API_KEY` is unset.
   - `app/services/demo_data.py`: Canonical 4-city location registry and deterministic Day 1 demo scenarios (used only when the user explicitly selects Demo Mode).
 
 ---
 
 ## 4. AI Integration & Prompt Design
 
-AIRWISE AI integrates **Google Gemini (`gemini-2.5-flash`)** exclusively on the FastAPI backend via the official `google-genai` SDK (`app/services/gemini_assistant.py`), keeping `GEMINI_API_KEY` completely isolated from the browser.
+AIRWISE AI integrates **Google Gemini (`gemini-3.5-flash-lite` default, configurable via `AIRWISE_GEMINI_MODEL`)** exclusively on the FastAPI backend via the Gemini Developer API and official `google-genai` SDK (`app/services/gemini_assistant.py`), keeping `GEMINI_API_KEY` completely isolated from the browser.
 
 - **Strict Backend Data Grounding:** Every `POST /api/v1/assistant/ask` call fetches verified live and future-only forecast data via `fetch_open_meteo_air_quality()` (reusing the shared HTTP pool and single-flight cache) and injects that structured JSON snapshot into the prompt.
 - **Four Assistant Modes:** `ask`, `activity_planner` (family routine, children's play, school commute, household errands, exercise, elderly precautions, low-emission habits, and indoor ventilation timing), `pollutant_education`, and `city_comparison`.
@@ -196,7 +196,7 @@ AIRWISE AI strictly separates every data category and never silently mixes live,
 | `AIRWISE_HISTORY_REFRESH_MAX_AGE_SECONDS` | `21600` | Max age (6 hours) before persisted SQLite windows refresh from Open-Meteo. |
 | `AIRWISE_HISTORY_TIMEOUT_SECONDS` | `12.0` | Timeout for historical Open-Meteo requests. |
 | `GEMINI_API_KEY` *(or `AIRWISE_GEMINI_API_KEY`)* | *(unset)* | Optional backend-only Google AI Studio key for Gemini assistant. **Never place in frontend `.env.local`.** |
-| `AIRWISE_GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model ID used via `google-genai`. |
+| `AIRWISE_GEMINI_MODEL` | `gemini-3.5-flash-lite` | Gemini Developer API model ID used via `google-genai` (overrideable via env var). |
 | `AIRWISE_GEMINI_TIMEOUT_SECONDS` | `15.0` | Timeout for Gemini API calls. |
 
 ### Frontend (`frontend/.env.local` — copy from `frontend/.env.example`)
@@ -255,7 +255,7 @@ Open **`http://localhost:3000`** in your browser.
 cd C:\Projects\airwise-ai\backend
 .\.venv\Scripts\python.exe -m pytest -v
 ```
-Runs all **125 offline mocked tests** across `tests/test_api.py`, `tests/test_assistant.py`, `tests/test_history.py`, `tests/test_intelligence.py`, `tests/test_observability.py`, `tests/test_lifecycle_http.py`, `tests/test_cache_concurrency.py`, and `tests/test_sqlite_reliability.py`.
+Runs all **126 offline mocked tests** across `tests/test_api.py`, `tests/test_assistant.py`, `tests/test_history.py`, `tests/test_intelligence.py`, `tests/test_observability.py`, `tests/test_lifecycle_http.py`, `tests/test_cache_concurrency.py`, and `tests/test_sqlite_reliability.py`.
 
 ### Frontend TypeScript Check & Production Build
 ```powershell
