@@ -85,12 +85,11 @@ export default function LeafletMapCanvas({
         scrollWheelZoom: false,
       });
 
-      // Free, keyless CARTO Dark Matter raster basemap backed by OpenStreetMap contributors
+      // Free, keyless OpenStreetMap standard raster tiles (styled dark via CSS on .leaflet-tile-pane)
       leaflet
-        .tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a>',
-          subdomains: "abcd",
+            '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
           maxZoom: 19,
         })
         .addTo(map);

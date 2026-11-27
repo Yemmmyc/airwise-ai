@@ -279,7 +279,7 @@ export default function AirQualityMapSection({
               </span>
             </div>
             <span className="text-[10px] text-theme-muted shrink-0">
-              Basemap: OpenStreetMap &amp; CARTO Dark Matter
+              Basemap: OpenStreetMap
             </span>
           </div>
         </div>

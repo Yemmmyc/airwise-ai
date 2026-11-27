@@ -13,7 +13,7 @@ AIRWISE AI enforces a strict separation between the browser UI and the backend i
 - **Frontend (`frontend/`):** Next.js 16 (App Router), React 18, TypeScript, Tailwind CSS, and Leaflet (`leaflet`), running locally on `http://localhost:3000`.
   - Communicates **only** with the local FastAPI backend (`NEXT_PUBLIC_API_BASE_URL`, default `http://127.0.0.1:8000`).
   - Never calls Open-Meteo or Google Gemini directly and never holds API keys.
-  - Displays live model conditions, a 4-city Leaflet map (CARTO Dark Matter / OpenStreetMap raster tiles, no browser geolocation API), 7/14/30-day SVG historical trend charts, deterministic predictive intelligence cards, a grounded Gemini assistant panel, and an explicit Demo Mode toggle.
+  - Displays live model conditions, a 4-city Leaflet map (keyless OpenStreetMap standard raster tiles `https://tile.openstreetmap.org/{z}/{x}/{y}.png` with `© OpenStreetMap contributors` attribution, restrained dark CSS tile-pane styling, subject to OSMF public tile usage policy with no SLA; no API key or browser geolocation API), 7/14/30-day SVG historical trend charts, deterministic predictive intelligence cards, a grounded Gemini assistant panel, and an explicit Demo Mode toggle.
 - **Backend (`backend/`):** Python 3.12, FastAPI, Pydantic v2, `pydantic-settings`, `httpx`, `google-genai`, and standard-library `sqlite3`, running locally on `http://127.0.0.1:8000`.
   - Canonical supported cities: `lagos-ng` (Lagos, Nigeria), `abuja-ng` (Abuja, Nigeria), `nairobi-ke` (Nairobi, Kenya), and `accra-gh` (Accra, Ghana).
 

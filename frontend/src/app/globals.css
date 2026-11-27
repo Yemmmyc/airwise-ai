@@ -32,6 +32,12 @@ body {
   font-family: inherit;
 }
 
+/* Restrained dark presentation filter applied ONLY to map raster tiles,
+   leaving AQI markers, labels, popups, controls, and attribution untouched. */
+.airwise-leaflet-container .leaflet-tile-pane {
+  filter: invert(92%) hue-rotate(180deg) brightness(95%) contrast(90%) saturate(75%);
+}
+
 .airwise-leaflet-container .leaflet-control-zoom a {
   background-color: #142321;
   color: #f1f5f4;

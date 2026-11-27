@@ -16,7 +16,7 @@ import type {
 } from "../../src/types/dashboard";
 
 /**
- * 1x1 transparent PNG used to stub Leaflet CARTO basemap tiles so browser QA
+ * 1x1 transparent PNG used to stub Leaflet OpenStreetMap basemap tiles so browser QA
  * runs 100% offline and deterministically without external tile requests.
  */
 const TRANSPARENT_PNG_BASE64 =
@@ -940,7 +940,7 @@ export interface MockApiController {
 
 /**
  * Installs deterministic route interception for all AIRWISE AI backend APIs
- * and Leaflet CARTO map tiles.
+ * and Leaflet OpenStreetMap tiles.
  */
 export async function installMockApi(
   page: Page,
@@ -948,7 +948,7 @@ export async function installMockApi(
 ): Promise<MockApiController> {
   const requests: RecordedApiRequest[] = [];
 
-  await page.route("**/*basemaps.cartocdn.com/**", async (route) => {
+  await page.route("**/*tile.openstreetmap.org/**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "image/png",
