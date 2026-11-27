@@ -22,6 +22,8 @@ AIRWISE AI runs on a zero-cost free-tier deployment (**Vercel Hobby** for the Ne
 5. Open the **AIRWISE AI Assistant** and click **`Family routine & low-emission plan`** or ask a location-aware air-quality question.
 6. Review the structured five-section recommendations, non-medical guidance, and Open-Meteo CAMS Global data provenance and timestamps.
 
+*Prefer a visual preview first? Jump straight to the [Production Screenshots](#production-screenshots) section below.*
+
 ---
 
 ## 1. Problem Statement
@@ -320,13 +322,19 @@ npm.cmd run test:e2e:a11y
 
 ---
 
-## 13. Production Screenshots (Pending Capture)
+## Production Screenshots
 
-*Genuine production screenshots from the live deployment will be added in a separate step (no synthetic or Playwright-stubbed map images are included here):*
+*All four screenshots below were captured directly from the live production deployment (`https://frontend-lovat-rho-21.vercel.app/` backed by `https://airwise-ai-pwxq.onrender.com`) using real Open-Meteo CAMS Global model data, live OpenStreetMap tiles, and a real `gemini-3.5-flash-lite` response. Click any image to view it at full resolution.*
 
-- **Planned Screenshot 1 — Live Dashboard, Pollutant Cards & OpenStreetMap 4-City Map:** *(Pending genuine production capture)*
-- **Planned Screenshot 2 — Historical Trends & Predictive Intelligence Risk Windows:** *(Pending genuine production capture)*
-- **Planned Screenshot 3 — Family Routine & Low-Emission Gemini Assistant Response:** *(Pending genuine production capture)*
+| **1. AIRWISE AI Dashboard** | **2. Pollutant Intelligence** |
+| :---: | :---: |
+| [![AIRWISE AI Dashboard showing live Lagos US AQI 77 summary and dark-styled OpenStreetMap regional map with Lagos, Abuja, Nairobi, and Accra markers](docs/screenshots/01-airwise-dashboard.png)](docs/screenshots/01-airwise-dashboard.png) | [![AIRWISE AI Pollutant Intelligence showing all five live-model pollutant cards (PM2.5, PM10, NO2, O3, SO2) with numeric concentrations and WHO guideline references](docs/screenshots/02-pollutant-intelligence.png)](docs/screenshots/02-pollutant-intelligence.png) |
+| **AIRWISE AI Dashboard** — Live Lagos air-quality overview and four-city regional map. | **Pollutant Intelligence** — Five live-model pollutant concentrations with WHO guideline references. |
+
+| **3. Forecast Intelligence** | **4. Gemini AI Assistant** |
+| :---: | :---: |
+| [![AIRWISE AI Forecast Intelligence showing deterministic Peak Forecast Risk, comparatively favorable windows, activity planning cards, and 24-hour trend signals for Lagos](docs/screenshots/03-forecast-intelligence.png)](docs/screenshots/03-forecast-intelligence.png) | [![AIRWISE AI Gemini Assistant showing a live gemini-3.5-flash-lite five-section grounded family routine and low-emission response for Lagos](docs/screenshots/04-gemini-ai-assistant.png)](docs/screenshots/04-gemini-ai-assistant.png) |
+| **Forecast Intelligence** — Predictive risk analysis, favorable activity windows and hourly forecast insights. | **Gemini AI Assistant** — Grounded family routine and low-emission recommendations generated using Gemini. |
 
 ---
 
