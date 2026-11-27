@@ -47,11 +47,17 @@ interface DisplayPollutantCard {
   name: string;
   value: number | null;
   unit: string;
-  availability: "available" | "unavailable";
-  concentrationLevel: PollutantStatus | "Unavailable";
+  availability: "available" | "loading" | "demo-excluded" | "unavailable";
+  concentrationLevel: PollutantStatus | "Loading" | "Demo Excluded" | "Unavailable";
   whoGuidelineRef: string;
   sourceHint: string;
-  originBadge: "Live Model" | "Cached Model" | "Demo Sample" | "Data Unavailable";
+  originBadge:
+    | "Live Model"
+    | "Cached Model"
+    | "Demo Sample"
+    | "Loading"
+    | "Demo Excluded"
+    | "Data Unavailable";
 }
 
 const POLLUTANT_REFERENCE_METADATA: Record<
@@ -161,7 +167,9 @@ function getAqiBarColorStyle(aqi: number | null): string {
   return "bg-purple-500/80 border-purple-400";
 }
 
-function getPollutantStatusStyle(status: PollutantStatus | "Unavailable"): string {
+function getPollutantStatusStyle(
+  status: PollutantStatus | "Loading" | "Demo Excluded" | "Unavailable"
+): string {
   switch (status) {
     case "Low":
       return "bg-emerald-950/85 text-emerald-300 border-emerald-500/40";
@@ -171,6 +179,10 @@ function getPollutantStatusStyle(status: PollutantStatus | "Unavailable"): strin
       return "bg-orange-950/85 text-orange-300 border-orange-500/40";
     case "High":
       return "bg-red-950/85 text-red-300 border-red-500/40";
+    case "Loading":
+      return "bg-teal-950/85 text-theme-mint border-theme-accent/40";
+    case "Demo Excluded":
+      return "bg-amber-950/75 text-amber-200 border-amber-500/40";
     case "Unavailable":
       return "bg-slate-900/90 text-slate-300 border-slate-600/50";
   }
@@ -350,6 +362,7 @@ export default function DashboardClient() {
     (viewMode === "live-model" || viewMode === "stale-cached") &&
     liveAirQuality !== null &&
     liveAirQuality.location.id === selectedLocationId;
+  const isLoadingLive = viewMode === "loading";
   const isDemoMode = viewMode === "demo-fallback";
   const isUnavailableMode = viewMode === "unavailable";
 
@@ -365,20 +378,22 @@ export default function DashboardClient() {
         liveAirQuality.o3,
         liveAirQuality.so2,
       ];
-      return items.map((m) => ({
-        code: m.code,
-        name: m.name,
-        value: m.status === "available" ? m.value : null,
-        unit: m.unit,
-        availability: m.status,
-        concentrationLevel:
-          m.status === "available"
+      return items.map((m) => {
+        const isAvailable = m.status === "available" && m.value !== null;
+        return {
+          code: m.code,
+          name: m.name,
+          value: isAvailable ? m.value : null,
+          unit: m.unit,
+          availability: isAvailable ? "available" : "unavailable",
+          concentrationLevel: isAvailable
             ? classifyConcentrationLevel(m.code, m.value)
             : "Unavailable",
-        whoGuidelineRef: POLLUTANT_REFERENCE_METADATA[m.code].whoGuidelineRef,
-        sourceHint: POLLUTANT_REFERENCE_METADATA[m.code].sourceHint,
-        originBadge,
-      }));
+          whoGuidelineRef: POLLUTANT_REFERENCE_METADATA[m.code].whoGuidelineRef,
+          sourceHint: POLLUTANT_REFERENCE_METADATA[m.code].sourceHint,
+          originBadge: isAvailable ? originBadge : "Data Unavailable",
+        };
+      });
     }
 
     if (isDemoMode) {
@@ -406,19 +421,18 @@ export default function DashboardClient() {
         }
         return {
           code,
-          name: "Sulphur Dioxide (Not Included in Demo Scenario)",
+          name: "Sulphur Dioxide",
           value: null,
           unit: "µg/m³",
-          availability: "unavailable",
-          concentrationLevel: "Unavailable",
+          availability: "demo-excluded",
+          concentrationLevel: "Demo Excluded",
           whoGuidelineRef: POLLUTANT_REFERENCE_METADATA[code].whoGuidelineRef,
           sourceHint: POLLUTANT_REFERENCE_METADATA[code].sourceHint,
-          originBadge: "Data Unavailable",
+          originBadge: "Demo Excluded",
         };
       });
     }
 
-    // Loading or Unavailable mode: never show demo numbers
     const codes: Array<{
       code: "PM2.5" | "PM10" | "NO2" | "O3" | "SO2";
       name: string;
@@ -429,6 +443,23 @@ export default function DashboardClient() {
       { code: "O3", name: "Ground-Level Ozone" },
       { code: "SO2", name: "Sulphur Dioxide" },
     ];
+
+    // Live request in progress: display explicit loading state (never DATA UNAVAILABLE or demo values)
+    if (isLoadingLive) {
+      return codes.map(({ code, name }) => ({
+        code,
+        name,
+        value: null,
+        unit: "µg/m³",
+        availability: "loading",
+        concentrationLevel: "Loading",
+        whoGuidelineRef: POLLUTANT_REFERENCE_METADATA[code].whoGuidelineRef,
+        sourceHint: POLLUTANT_REFERENCE_METADATA[code].sourceHint,
+        originBadge: "Loading",
+      }));
+    }
+
+    // Request failed / unavailable mode: never show demo numbers
     return codes.map(({ code, name }) => ({
       code,
       name,
@@ -440,7 +471,7 @@ export default function DashboardClient() {
       sourceHint: POLLUTANT_REFERENCE_METADATA[code].sourceHint,
       originBadge: "Data Unavailable",
     }));
-  }, [isLiveOrCached, liveAirQuality, viewMode, isDemoMode, demoDashboard]);
+  }, [isLiveOrCached, isLoadingLive, liveAirQuality, viewMode, isDemoMode, demoDashboard]);
 
   const futureForecastPoints = isLiveOrCached
     ? liveAirQuality?.hourly_forecast.points ?? []
@@ -1302,9 +1333,11 @@ export default function DashboardClient() {
                 <h2 id="heading-pollutants" className="text-xl font-bold text-theme-text">
                   Atmospheric Pollutant Concentrations (PM2.5, PM10, NO2, O3, SO2)
                 </h2>
-                <p className="text-sm text-theme-muted">
+                <p className="text-sm text-theme-muted" aria-live="polite">
                   {isLiveOrCached
                     ? `Current CAMS Global model estimates (~45 km grid average) for ${activeLocation.display_name}. Missing variables are reported individually as DATA UNAVAILABLE.`
+                    : isLoadingLive
+                    ? `Loading live CAMS Global model estimates for ${activeLocation.display_name}...`
                     : isDemoMode
                     ? `Explicit demo pollutant profiles for ${activeLocation.display_name}.`
                     : `Live pollutant readings for ${activeLocation.display_name} are currently unavailable.`}
@@ -1315,7 +1348,10 @@ export default function DashboardClient() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+            <div
+              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4"
+              aria-busy={isLoadingLive}
+            >
               {pollutantCards.map((pollutant) => (
                 <article
                   key={pollutant.code}
@@ -1354,6 +1390,17 @@ export default function DashboardClient() {
                             {pollutant.unit}
                           </span>
                         </>
+                      ) : pollutant.availability === "loading" ? (
+                        <span
+                          role="status"
+                          className="text-sm font-semibold text-theme-mint py-1 animate-pulse"
+                        >
+                          Loading live model...
+                        </span>
+                      ) : pollutant.availability === "demo-excluded" ? (
+                        <span className="text-sm font-semibold text-amber-200 py-1">
+                          Not included in demo scenario
+                        </span>
                       ) : (
                         <span className="text-base font-bold text-slate-300 py-1">
                           DATA UNAVAILABLE
@@ -1366,8 +1413,11 @@ export default function DashboardClient() {
                             ? "text-emerald-300 bg-emerald-500/15 border-emerald-400/35"
                             : pollutant.originBadge === "Cached Model"
                             ? "text-amber-300 bg-amber-500/15 border-amber-400/35"
-                            : pollutant.originBadge === "Demo Sample"
+                            : pollutant.originBadge === "Demo Sample" ||
+                              pollutant.originBadge === "Demo Excluded"
                             ? "text-amber-300 bg-amber-500/15 border-amber-400/35"
+                            : pollutant.originBadge === "Loading"
+                            ? "text-theme-mint bg-teal-500/15 border-theme-accent/40"
                             : "text-slate-300 bg-slate-800 border-slate-600/50"
                         }`}
                       >
