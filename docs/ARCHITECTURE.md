@@ -1,8 +1,10 @@
 # AIRWISE AI — System Architecture & Reliability Overview
 
-**Project:** AIRWISE AI (Hack2Skill PromptWars Challenge 6: Urban Air Quality Assistant)  
-**Deployment Model:** Local-first on Windows 11 (PowerShell) — not publicly deployed  
-**Backend Version:** `0.9.1`
+- **Project:** AIRWISE AI (Hack2Skill PromptWars Challenge 6: Urban Air Quality Assistant)
+- **Deployment Model:** Free-tier public deployment (Vercel Hobby frontend + Render Free backend) and local development on Windows 11 (PowerShell)
+- **Live Frontend:** https://frontend-lovat-rho-21.vercel.app/
+- **Live Backend:** https://airwise-ai-pwxq.onrender.com
+- **Backend Version:** `0.9.1`
 
 ---
 
@@ -10,11 +12,11 @@
 
 AIRWISE AI enforces a strict separation between the browser UI and the backend intelligence service:
 
-- **Frontend (`frontend/`):** Next.js 16 (App Router), React 18, TypeScript, Tailwind CSS, and Leaflet (`leaflet`), running locally on `http://localhost:3000`.
-  - Communicates **only** with the local FastAPI backend (`NEXT_PUBLIC_API_BASE_URL`, default `http://127.0.0.1:8000`).
+- **Frontend (`frontend/`):** Next.js 16 (App Router), React 18, TypeScript, Tailwind CSS, and Leaflet (`leaflet`), deployed on **Vercel Hobby** (`https://frontend-lovat-rho-21.vercel.app/`) and runnable locally on `http://localhost:3000`.
+  - Communicates **only** with the configured FastAPI backend (`NEXT_PUBLIC_API_BASE_URL`, pointing to `https://airwise-ai-pwxq.onrender.com` in production or `http://127.0.0.1:8000` locally).
   - Never calls Open-Meteo or Google Gemini directly and never holds API keys.
-  - Displays live model conditions, a 4-city Leaflet map (keyless OpenStreetMap standard raster tiles `https://tile.openstreetmap.org/{z}/{x}/{y}.png` with `© OpenStreetMap contributors` attribution, restrained dark CSS tile-pane styling, subject to OSMF public tile usage policy with no SLA; no API key or browser geolocation API), 7/14/30-day SVG historical trend charts, deterministic predictive intelligence cards, a grounded Gemini assistant panel, and an explicit Demo Mode toggle.
-- **Backend (`backend/`):** Python 3.12, FastAPI, Pydantic v2, `pydantic-settings`, `httpx`, `google-genai`, and standard-library `sqlite3`, running locally on `http://127.0.0.1:8000`.
+  - Displays live model conditions (distinguishing `Loading live model...`, valid numeric values including `0`, genuine `DATA UNAVAILABLE`, and Demo Mode `SO2` `Not included in demo scenario`), a 4-city Leaflet map (keyless OpenStreetMap standard raster tiles `https://tile.openstreetmap.org/{z}/{x}/{y}.png` with `© OpenStreetMap contributors` attribution, restrained dark CSS tile-pane styling, subject to OSMF public tile usage policy with no SLA; no API key or browser geolocation API), 7/14/30-day SVG historical trend charts, deterministic predictive intelligence cards, a grounded Gemini assistant panel, and an explicit Demo Mode toggle.
+- **Backend (`backend/`):** Python 3.12, FastAPI, Pydantic v2, `pydantic-settings`, `httpx`, `google-genai`, and standard-library `sqlite3`, deployed as a single-worker ASGI process on **Render Free** (`https://airwise-ai-pwxq.onrender.com`, `uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`) and runnable locally on `http://127.0.0.1:8000`.
   - Canonical supported cities: `lagos-ng` (Lagos, Nigeria), `abuja-ng` (Abuja, Nigeria), `nairobi-ke` (Nairobi, Kenya), and `accra-gh` (Accra, Ghana).
 
 ---
@@ -61,6 +63,7 @@ AIRWISE AI enforces a strict separation between the browser UI and the backend i
 - Stores historical hourly records in `backend/data/airwise_history.db` (Git-ignored) keyed by `(location_id, timestamp_utc, model_domain)` with idempotent `ON CONFLICT` upserts.
 - `_open_connection()` guarantees deterministic `conn.close()` in `finally` (even if rollback fails); `_transaction()` wraps writes in explicit commit/rollback boundaries with zero cross-thread connection sharing.
 - Every connection sets `PRAGMA busy_timeout = 5000`; `initialize()` enables `PRAGMA journal_mode = WAL` (with safe fallback when WAL is unsupported) and uses a bounded 16-stripe `_INIT_STRIPES` lock + `_INITIALIZED_DB_PATHS` registry that avoids repeated DDL and transparently re-initializes if the DB file is removed.
+- **Render Free Ephemeral Filesystem Limitation:** On Render Free web services (no persistent disk), `backend/data/airwise_history.db` is wiped on container restart, redeploy, or idle spin-down. The store transparently recreates the database and reconstructs historical data from Open-Meteo on subsequent requests, while cross-restart `persisted_database_fallback` is only available within a warm container lifecycle.
 
 ### D. Observability, Secret Redaction & Baseline Security Headers (`app/core/logging_config.py`, `app/main.py`)
 - **Request Correlation:** HTTP middleware validates incoming `X-Request-ID` (`^[A-Za-z0-9._-]{4,64}$`) or generates a UUID fallback, binds it to a `contextvars.ContextVar`, resets it in `finally`, and returns `X-Request-ID` on normal, `4xx`, `5xx`, and unhandled `500` JSON responses (exposed via CORS `expose_headers`).

@@ -2,7 +2,25 @@
 
 **Hack2Skill PromptWars Challenge 6: Urban Air Quality Assistant**
 
-> **Deployment Status Notice:** AIRWISE AI currently runs locally on Windows 11 (PowerShell) with zero paid subscriptions required. No public deployment URL is published yet; live URLs and screenshots will be added only after deployment is independently verified.
+## Live Production Deployment (Free-Tier Hosting)
+
+- **Live Application:** https://frontend-lovat-rho-21.vercel.app/
+- **Backend Health:** https://airwise-ai-pwxq.onrender.com/api/v1/health
+- **Gemini Assistant Status:** https://airwise-ai-pwxq.onrender.com/api/v1/assistant/status
+- **GitHub Repository:** https://github.com/Yemmmyc/airwise-ai
+
+AIRWISE AI runs on a zero-cost free-tier deployment (**Vercel Hobby** for the Next.js frontend, **Render Free** for the FastAPI backend, and the **Gemini Developer API** via `google-genai` defaulting to `gemini-3.5-flash-lite`) alongside full local Windows 11 development support.
+
+> **Free-Tier Wake-Up Note:** Because the backend runs on Render Free, an idle instance may take approximately **30–60 seconds** to wake on the first visit. The frontend displays `Loading live model...` during wake-up and applies a bounded retry for initial `GET` requests.
+
+### 60-Second Judge Quick-Start
+
+1. Open the live application: https://frontend-lovat-rho-21.vercel.app/ *(allow 30–60 seconds if the free-tier backend is waking from inactivity)*.
+2. Select **Lagos**, **Abuja**, **Nairobi**, or **Accra** using the location selector or quick city buttons.
+3. Review the current **US EPA AQI** banner and the five **Atmospheric Pollutant Concentrations** cards (`PM2.5`, `PM10`, `NO2`, `O3`, `SO2`).
+4. Explore the interactive **OpenStreetMap regional map**, **24-hour future-only forecast**, **Historical Trends**, and **Predictive Intelligence** risk windows.
+5. Open the **AIRWISE AI Assistant** and click **`Family routine & low-emission plan`** or ask a location-aware air-quality question.
+6. Review the structured five-section recommendations, non-medical guidance, and Open-Meteo CAMS Global data provenance and timestamps.
 
 ---
 
@@ -25,17 +43,17 @@ AIRWISE AI is a full-stack Urban Air Quality Assistant that combines transparent
 
 ## 3. Architecture & Technology Stack
 
-### Frontend (`C:\Projects\airwise-ai\frontend`)
+### Frontend (`frontend/`)
 - **Stack:** Next.js 16.4.6 (App Router), React 18, TypeScript, Tailwind CSS (Enterprise Dark Charcoal / Forest Green / Teal & Mint theme), and Leaflet (`leaflet` + `@types/leaflet`).
 - **Key Modules:**
-  - **Live Air Quality Dashboard ([DashboardClient.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/DashboardClient.tsx)):** Synchronized city selector (`lagos-ng`, `abuja-ng`, `nairobi-ke`, `accra-gh`), US EPA AQI summary with category legend, 5 pollutant cards (`PM2.5`, `PM10`, `NO2`, `O3`, `SO2`), future-only hourly forecast timeline + accessible table, CAMS Global provenance section, non-medical health guidance, and explicit Demo Mode toggle.
-  - **Air Quality Intelligence Map ([AirQualityMapSection.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/AirQualityMapSection.tsx), [LeafletMapCanvas.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/LeafletMapCanvas.tsx)):** Interactive Leaflet map using keyless OpenStreetMap standard raster tiles (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`) with a restrained dark CSS tile-pane filter (preserving readable labels and untouched AQI markers; no API key or browser geolocation required), synchronized bidirectionally with the dashboard location selector.
-  - **Historical Trends & Insights ([HistoricalTrendsSection.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/HistoricalTrendsSection.tsx)):** Zero-dependency accessible custom SVG charts supporting 7, 14, and 30-day ranges, 6 selectable metrics (`US AQI`, `PM2.5`, `PM10`, `NO2`, `O3`, `SO2`), daily summaries & peaks, 7-day hourly model series, 4-city daily AQI comparison (distinct color, dash pattern, and marker shape per city), non-causal observational insights, and accessible tabular alternatives.
-  - **Predictive Intelligence & Risk Insights ([PredictiveIntelligenceSection.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/PredictiveIntelligenceSection.tsx)):** Phase 7 deterministic risk UI displaying **Peak Forecast Risk**, elevated-risk windows, isolated single-hour spikes, comparatively favorable windows, independent activity-planning cards, 6-metric non-color trend signals, and transparent forecast data-quality evidence (paused automatically in Demo Mode).
-  - **Gemini Air Quality Assistant ([AssistantPanel.tsx](file:///c:/Projects/airwise-ai/frontend/src/components/AssistantPanel.tsx)):** Interactive conversation experience supporting **Ask AIRWISE**, **Daily Activity Planner**, **Pollutant Education**, and **4-City Comparison**, strictly grounded in verified FastAPI Open-Meteo responses with explicit separation of verified data, forecast data, AI interpretation, and general non-medical health guidance.
-- **Strict Frontend/Backend Boundary:** The browser communicates **only** with the local FastAPI backend (`NEXT_PUBLIC_API_BASE_URL`). It never calls Open-Meteo or Google Gemini directly and never holds API secrets.
+  - **Live Air Quality Dashboard ([DashboardClient.tsx](frontend/src/components/DashboardClient.tsx)):** Synchronized city selector (`lagos-ng`, `abuja-ng`, `nairobi-ke`, `accra-gh`), US EPA AQI summary with category legend, 5 pollutant cards (`PM2.5`, `PM10`, `NO2`, `O3`, `SO2`) with explicit loading/unavailable/demo-exclusion states, future-only hourly forecast timeline + accessible table, CAMS Global provenance section, non-medical health guidance, and explicit Demo Mode toggle.
+  - **Air Quality Intelligence Map ([AirQualityMapSection.tsx](frontend/src/components/AirQualityMapSection.tsx), [LeafletMapCanvas.tsx](frontend/src/components/LeafletMapCanvas.tsx)):** Interactive Leaflet map using keyless OpenStreetMap standard raster tiles (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`) with a restrained dark CSS tile-pane filter (preserving readable labels and untouched AQI markers; no API key or browser geolocation required), synchronized bidirectionally with the dashboard location selector.
+  - **Historical Trends & Insights ([HistoricalTrendsSection.tsx](frontend/src/components/HistoricalTrendsSection.tsx)):** Zero-dependency accessible custom SVG charts supporting 7, 14, and 30-day ranges, 6 selectable metrics (`US AQI`, `PM2.5`, `PM10`, `NO2`, `O3`, `SO2`), daily summaries & peaks, 7-day hourly model series, 4-city daily AQI comparison (distinct color, dash pattern, and marker shape per city), non-causal observational insights, and accessible tabular alternatives.
+  - **Predictive Intelligence & Risk Insights ([PredictiveIntelligenceSection.tsx](frontend/src/components/PredictiveIntelligenceSection.tsx)):** Phase 7 deterministic risk UI displaying **Peak Forecast Risk**, elevated-risk windows, isolated single-hour spikes, comparatively favorable windows, independent activity-planning cards, 6-metric non-color trend signals, and transparent forecast data-quality evidence (paused automatically in Demo Mode).
+  - **Gemini Air Quality Assistant ([AssistantPanel.tsx](frontend/src/components/AssistantPanel.tsx)):** Interactive conversation experience supporting **Ask AIRWISE**, **Daily Activity Planner**, **Pollutant Education**, and **4-City Comparison**, strictly grounded in verified FastAPI Open-Meteo responses with explicit separation of verified data, forecast data, AI interpretation, and general non-medical health guidance.
+- **Strict Frontend/Backend Boundary:** The browser communicates **only** with the configured FastAPI backend (`NEXT_PUBLIC_API_BASE_URL`). It never calls Open-Meteo or Google Gemini directly and never holds API secrets.
 
-### Backend (`C:\Projects\airwise-ai\backend`)
+### Backend (`backend/`)
 - **Stack:** Python 3.12, FastAPI, Pydantic v2, `pydantic-settings`, `httpx`, `google-genai` (official Google Gen AI SDK), Python standard-library `sqlite3`, and `pytest`.
 - **Phase 9.1 Reliability & Observability Architecture (`docs/ARCHITECTURE.md`):**
   - `app/main.py`: FastAPI lifespan owning one shared synchronous `httpx.Client` pool (`max_connections=20`, `max_keepalive_connections=10`, `keepalive_expiry=30.0s`) with deterministic shutdown, `X-Request-ID` correlation middleware, and baseline security response headers (`X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`).
@@ -108,7 +126,9 @@ AIRWISE AI strictly separates every data category and never silently mixes live,
   - `HOURLY FORECAST` (strictly timestamps `> observation_time`)
   - `HISTORICAL PROVIDER DATA — MODEL-BASED ESTIMATE` (strictly timestamps `< current UTC`, with explicit `storage_origin`: `fresh_provider_retrieval`, `historical_cache`, `persisted_database_records`, or `persisted_database_fallback`)
   - `DEMO DATA` (activated **only** when the user explicitly toggles Demo Mode; live map markers and historical model charts pause in Demo Mode)
-  - `DATA UNAVAILABLE` (missing/null individual variables or unreachable cities remain `null` and are never zero-filled or replaced with demo data)
+  - `Loading live model...` (displayed on pollutant cards while a live model request is in progress, never represented as missing provider data)
+  - `DATA UNAVAILABLE` (displayed only when a provider variable is explicitly `null`/unavailable or a live request fails; genuine numeric `0` measurements are preserved as valid available readings and never treated as unavailable)
+  - `Not included in demo scenario` (displayed on the `SO2` card when Demo Mode is active, since the Day 1 demo dataset includes `PM2.5`, `PM10`, `NO2`, and `O3` only)
 - **Attribution:**
   - Weather and air quality data by Open-Meteo.com (`https://open-meteo.com/en/docs/air-quality-api`)
   - Contains modified Copernicus Atmosphere Monitoring Service (CAMS) information (`https://atmosphere.copernicus.eu/`)
@@ -291,25 +311,22 @@ npm.cmd run test:e2e:a11y
 
 ---
 
-## 12. Deployment Architecture (Planned Free-Tier Topology)
+## 12. Deployment Architecture (Free-Tier Production Topology)
 
-> **Not Yet Deployed:** No live public URL exists yet. The architecture below documents the verified zero-cost deployment plan for Attempt 1.
-
-- **Frontend (Vercel Hobby — Free):** Deploy `frontend/` directly as a Next.js 16 app with build-time environment variable `NEXT_PUBLIC_API_BASE_URL=https://<backend-origin>`.
-- **Backend (Render Free Web Service):** Deploy `backend/` as a single-worker ASGI process (`uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`), health check `/api/v1/health`, and server-only environment variables (`GEMINI_API_KEY`, `AIRWISE_ENVIRONMENT=production`, `AIRWISE_APP_VERSION=0.9.1`, `AIRWISE_LOG_LEVEL=INFO`, `AIRWISE_ALLOWED_ORIGINS=https://<frontend-origin>`).
+- **Frontend (Vercel Hobby — Free):** Deployed from `frontend/` as a Next.js 16 application at https://frontend-lovat-rho-21.vercel.app/ with build-time environment variable `NEXT_PUBLIC_API_BASE_URL=https://airwise-ai-pwxq.onrender.com`.
+- **Backend (Render Free Web Service):** Deployed from `backend/` at https://airwise-ai-pwxq.onrender.com as a single-worker ASGI process (`uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`), health check `/api/v1/health`, and server-only environment variables (`GEMINI_API_KEY`, `AIRWISE_ENVIRONMENT=production`, `AIRWISE_APP_VERSION=0.9.1`, `AIRWISE_LOG_LEVEL=INFO`, `AIRWISE_ALLOWED_ORIGINS=https://frontend-lovat-rho-21.vercel.app`).
+- **AI Backend:** Uses the **Gemini Developer API** via `google-genai` with default model `gemini-3.5-flash-lite` (overrideable via `AIRWISE_GEMINI_MODEL`).
 - **Cold-Start Handling:** The frontend API client (`frontend/src/lib/api.ts`) applies a 35s request timeout and at most one bounded retry on idempotent `GET` requests during non-JSON gateway wake-up / cold-start timeouts (never auto-retrying `POST /api/v1/assistant/ask`).
 
 ---
 
-## 13. Screenshots & Demo Guide (Attempt 1 Placeholders)
+## 13. Production Screenshots (Pending Capture)
 
-*Live URLs and screenshots will be added only after public deployment is verified:*
+*Genuine production screenshots from the live deployment will be added in a separate step (no synthetic or Playwright-stubbed map images are included here):*
 
-- **Live Web App URL:** *(Pending verified public deployment)*
-- **Backend Health Endpoint:** *(Pending verified public deployment)*
-- **Screenshot 1 — Live Dashboard & 4-City Map:** *(To be captured post-deployment)*
-- **Screenshot 2 — Historical Trends & Predictive Intelligence:** *(To be captured post-deployment)*
-- **Screenshot 3 — Family Routine & Low-Emission Gemini Assistant:** *(To be captured post-deployment)*
+- **Planned Screenshot 1 — Live Dashboard, Pollutant Cards & OpenStreetMap 4-City Map:** *(Pending genuine production capture)*
+- **Planned Screenshot 2 — Historical Trends & Predictive Intelligence Risk Windows:** *(Pending genuine production capture)*
+- **Planned Screenshot 3 — Family Routine & Low-Emission Gemini Assistant Response:** *(Pending genuine production capture)*
 
 ---
 
